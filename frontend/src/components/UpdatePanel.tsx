@@ -16,6 +16,7 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import { useCallback, useEffect, useState } from "react";
 import { checkUpdate } from "../api";
 import type { ReleaseInfo, UpdateStatus } from "../types";
+import { Markdown } from "./Markdown";
 
 interface Props {
   onToast: (message: string) => void;
@@ -48,18 +49,14 @@ function HistoryItem({ release, isCurrent }: { release: ReleaseInfo; isCurrent: 
         )}
       </Stack>
       {release.name && release.name !== release.tag && (
-        <Typography variant="body2" sx={{ mt: 0.5 }}>
+        <Typography variant="body2" sx={{ mt: 0.5, fontWeight: 600 }}>
           {release.name}
         </Typography>
       )}
       {release.body && (
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          sx={{ mt: 0.5, whiteSpace: "pre-wrap", fontSize: 13 }}
-        >
-          {release.body.length > 600 ? `${release.body.slice(0, 600)}…` : release.body}
-        </Typography>
+        <Box sx={{ mt: 0.5, color: "text.secondary" }}>
+          <Markdown content={release.body} />
+        </Box>
       )}
     </Box>
   );
