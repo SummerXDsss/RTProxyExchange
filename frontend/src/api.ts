@@ -6,6 +6,7 @@ import type {
   SplitFormat,
   SplitResult,
   TransformRequest,
+  UpdateStatus,
 } from "./types";
 
 /// Read the server error message from a non-2xx response.
@@ -73,6 +74,13 @@ export async function downloadSplitZip(
   });
   if (!resp.ok) throw new Error(await errorMessage(resp));
   return resp.blob();
+}
+
+/// Check for updates against the project's GitHub releases/tags.
+export async function checkUpdate(refresh = false): Promise<UpdateStatus> {
+  const resp = await fetch(`/api/update${refresh ? "?refresh=1" : ""}`);
+  if (!resp.ok) throw new Error(await errorMessage(resp));
+  return resp.json();
 }
 
 /// Stream a batch conversion via SSE, invoking `onEvent` for each progress

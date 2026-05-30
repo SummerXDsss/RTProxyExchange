@@ -29,6 +29,7 @@ async fn main() {
 
     let state = AppState {
         default_config: Arc::new(build_config_from_env()),
+        update_cache: Arc::new(tokio::sync::Mutex::new(None)),
     };
 
     let cors = CorsLayer::new()
@@ -42,6 +43,7 @@ async fn main() {
         .route("/api/convert", post(api::convert))
         .route("/api/convert/stream", post(api::convert_stream))
         .route("/api/transform", post(api::transform))
+        .route("/api/update", get(api::check_update))
         .route("/api/split", post(split::split))
         .route("/api/split/zip", post(split::split_zip))
         .with_state(state)

@@ -122,6 +122,27 @@ export interface SplitResult {
   accounts: SplitAccount[];
 }
 
+/// One release entry in the version history.
+export interface ReleaseInfo {
+  tag: string;
+  version: string;
+  name: string | null;
+  body: string | null;
+  published_at: string | null;
+  prerelease: boolean;
+  html_url: string | null;
+}
+
+/// Update-check result from GET /api/update.
+export interface UpdateStatus {
+  current_version: string;
+  latest_version: string | null;
+  update_available: boolean;
+  latest_release: ReleaseInfo | null;
+  history: ReleaseInfo[];
+  error: string | null;
+}
+
 /// A saved run in local history.
 export interface HistoryEntry {
   id: string;

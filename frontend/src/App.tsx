@@ -29,6 +29,7 @@ import { ProgressPanel } from "./components/ProgressPanel";
 import { ResultPanel } from "./components/ResultPanel";
 import { SplitPanel } from "./components/SplitPanel";
 import { TransformPanel } from "./components/TransformPanel";
+import { UpdatePanel } from "./components/UpdatePanel";
 import { useColorMode } from "./hooks/useColorMode";
 import { useHistory } from "./hooks/useHistory";
 import type { BatchResult, CodexAccount, ConvertResponse, ProgressRow } from "./types";
@@ -218,6 +219,7 @@ export function App() {
             <Tab label="转换 / 登录" />
             <Tab label="格式转换" />
             <Tab label="账号拆分" />
+            <Tab label="检查更新" />
           </Tabs>
 
           {error && (
@@ -267,8 +269,10 @@ export function App() {
             </Grid>
           ) : tab === 1 ? (
             <TransformPanel onToast={setToast} />
-          ) : (
+          ) : tab === 2 ? (
             <SplitPanel onToast={setToast} />
+          ) : (
+            <UpdatePanel onToast={setToast} />
           )}
         </Container>
 

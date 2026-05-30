@@ -13,6 +13,7 @@ pub mod jwt;
 pub mod models;
 pub mod refresher;
 pub mod transform;
+pub mod update;
 
 #[cfg(test)]
 mod tests;
@@ -29,3 +30,4 @@ pub use transform::{
     sub2api_account_to_cpa, sub2api_export_to_cpa, sub2api_json_to_cpa, CpaAccount, SplitAccount,
     SplitResult, Sub2ApiAccount, Sub2ApiCredentials, Sub2ApiExport,
 };
+pub use update::{ReleaseInfo, UpdateChecker, UpdateStatus};

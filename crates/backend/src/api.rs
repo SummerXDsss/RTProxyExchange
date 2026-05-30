@@ -24,6 +24,9 @@ use tokio_stream::wrappers::ReceiverStream;
 pub struct AppState {
     /// Default refresh configuration (endpoint, client id, timeouts).
     pub default_config: Arc<RefreshConfig>,
+    /// Cached update-check result with its fetch time.
+    pub update_cache:
+        Arc<tokio::sync::Mutex<Option<(std::time::Instant, codex_core::UpdateStatus)>>>,
 }
 
 /// Request body for the convert endpoints.
@@ -242,3 +245,44 @@ pub async fn transform(
 
 // Bring StreamExt into scope for `.map` on the receiver stream.
 use futures::StreamExt;
+
+/// Cache TTL for update checks (stays well within GitHub's rate limit).
+const UPDATE_CACHE_TTL: Duration = Duration::from_secs(300);
+
+/// Check for updates against the project's GitHub releases/tags.
+///
+/// Result is cached for [`UPDATE_CACHE_TTL`]; pass `?refresh=1` to force a
+/// fresh fetch.
+pub async fn check_update(
+    State(state): State<AppState>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Result<Json<codex_core::UpdateStatus>, ApiErrorResponse> {
+    let force = params
+        .get("refresh")
+        .map(|v| v == "1" || v == "true")
+        .unwrap_or(false);
+
+    // Serve from cache when fresh and not forced.
+    {
+        let cache = state.update_cache.lock().await;
+        if !force {
+            if let Some((at, status)) = cache.as_ref() {
+                if at.elapsed() < UPDATE_CACHE_TTL {
+                    return Ok(Json(status.clone()));
+                }
+            }
+        }
+    }
+
+    let checker = codex_core::UpdateChecker::new(env!("CARGO_PKG_VERSION"))
+        .map_err(|e| ApiErrorResponse::internal(e.to_string()))?;
+    let status = checker.check().await;
+
+    // Only cache successful checks; keep retrying on transient failures.
+    if status.error.is_none() {
+        let mut cache = state.update_cache.lock().await;
+        *cache = Some((std::time::Instant::now(), status.clone()));
+    }
+
+    Ok(Json(status))
+}
