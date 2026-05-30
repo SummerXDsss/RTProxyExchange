@@ -1,0 +1,20 @@
+{
+  "oauth": {
+    "endpoint": "https://auth.openai.com/oauth/token",
+    "scope": "openid profile email",
+    "user_agent": "codex-cli/0.91.0",
+    "timeout": 25
+  },
+  "network": {
+    "max_retries": 3,
+    "concurrency": 4
+  },
+  "output": {
+    "default_format": "cpa",
+    "pretty_print": true
+  },
+  "security": {
+    "log_tokens": false,
+    "file_permissions": "600"
+  }
+}

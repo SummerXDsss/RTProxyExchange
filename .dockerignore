@@ -1,0 +1,14 @@
+# Rust build artifacts
+target/
+
+# Frontend deps & build output (rebuilt inside the image)
+frontend/node_modules/
+frontend/dist/
+
+# Git & local files
+.git/
+.gitignore
+*.md
+.tmp/
+accounts.json
+*.accounts.json

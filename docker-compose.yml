@@ -1,0 +1,19 @@
+services:
+  codex-converter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: codex-converter:latest
+    container_name: codex-converter
+    ports:
+      - "8787:8787"
+    environment:
+      # Listen port inside the container.
+      PORT: "8787"
+      CODEX_CONVERTER_TIMEOUT: "25"
+      CODEX_CONVERTER_CONCURRENCY: "4"
+      RUST_LOG: "codex_backend=info,tower_http=info"
+    # Optional: mount a config file (see config.example.json).
+    # volumes:
+    #   - ./config.example.json:/home/appuser/.codex-converter/config.json:ro
+    restart: unless-stopped

@@ -1,0 +1,31 @@
+/target
+**/*.rs.bk
+Cargo.lock.bak
+
+# Frontend build output (when served from backend)
+/frontend/dist
+/frontend/node_modules
+
+# Generated account exports (may contain secrets)
+accounts.json
+*.accounts.json
+
+# Secrets / credentials
+serverpwd.password
+*.password
+*.secret
+
+# Docker image tarballs
+*.tar.gz
+
+# Editor
+.vscode/
+
+# TLS certs / keys (never commit)
+deploy/certs/
+*.crt
+*.key
+*.pem
+
+# TS build info
+*.tsbuildinfo

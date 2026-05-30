@@ -1,0 +1,17 @@
+[package]
+name = "codex-cli"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "codex-converter"
+path = "src/main.rs"
+
+[dependencies]
+codex-core = { path = "../core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+tokio = { version = "1", features = ["full"] }
+clap = { version = "4", features = ["derive"] }
+anyhow = "1"

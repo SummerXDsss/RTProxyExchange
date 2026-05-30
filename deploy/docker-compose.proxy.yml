@@ -1,0 +1,41 @@
+# Production stack: app + nginx TLS reverse proxy.
+#
+# The app container is NOT published to the host; only nginx exposes 80/443.
+# Both share an internal network so nginx reaches the app by service name.
+#
+# Usage on the server (in this directory):
+#   docker compose -f docker-compose.proxy.yml up -d
+
+services:
+  codex-converter:
+    image: ${CODEX_IMAGE:-codex-converter:latest}
+    container_name: codex-converter
+    restart: unless-stopped
+    expose:
+      - "8787"          # internal only, not published to the host
+    environment:
+      PORT: "8787"
+      CODEX_CONVERTER_TIMEOUT: "15"
+      CODEX_CONVERTER_CONCURRENCY: "4"
+      RUST_LOG: "codex_backend=info,tower_http=info"
+    networks:
+      - codexnet
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: codex-nginx
+    restart: unless-stopped
+    depends_on:
+      - codex-converter
+    ports:
+      - "8081:80"
+      - "8443:443"
+    volumes:
+      - ./nginx/codex.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    networks:
+      - codexnet
+
+networks:
+  codexnet:
+    driver: bridge
