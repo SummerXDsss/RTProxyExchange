@@ -55,12 +55,33 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  deploy:
-    name: Deploy to server
+  # Gate so the deploy job is skipped (not failed) when server secrets are
+  # absent. Secrets can't be used directly in `if:`, so surface presence via a
+  # job output first.
+  check-secrets:
+    name: Check deploy secrets
     needs: build-and-push
     runs-on: ubuntu-latest
-    # Only deploy from the canonical repo, never from forks.
-    if: github.repository_owner == 'SummerXDsss'
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
+    steps:
+      - id: check
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          if [ -n "$DEPLOY_HOST" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::DEPLOY_HOST secret not set — skipping server deploy. Image was still pushed to GHCR."
+          fi
+
+  deploy:
+    name: Deploy to server
+    needs: check-secrets
+    runs-on: ubuntu-latest
+    # Only deploy from the canonical repo and only when secrets are configured.
+    if: github.repository_owner == 'SummerXDsss' && needs.check-secrets.outputs.configured == 'true'
     steps:
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1
