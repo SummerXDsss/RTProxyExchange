@@ -30,6 +30,7 @@ import { ResultPanel } from "./components/ResultPanel";
 import { SplitPanel } from "./components/SplitPanel";
 import { TransformPanel } from "./components/TransformPanel";
 import { UpdatePanel } from "./components/UpdatePanel";
+import { CpaUploadDialog, type UploadFile } from "./components/CpaUploadDialog";
 import { useColorMode } from "./hooks/useColorMode";
 import { useHistory } from "./hooks/useHistory";
 import type { BatchResult, CodexAccount, ConvertResponse, ProgressRow } from "./types";
@@ -59,6 +60,10 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+
+  // CPA push dialog state.
+  const [cpaOpen, setCpaOpen] = useState(false);
+  const [cpaFiles, setCpaFiles] = useState<UploadFile[]>([]);
 
   // Live streaming progress state.
   const [streaming, setStreaming] = useState(false);
@@ -197,6 +202,27 @@ export function App() {
     downloadText(serializeAccount(account, format), name, `已下载 ${name}`);
   };
 
+  /// Open the CPA push dialog for all current accounts (CPA single-object form).
+  const handlePushAll = () => {
+    const accounts = resultAccounts();
+    if (!accounts || accounts.length === 0) return;
+    setCpaFiles(
+      accounts.map((acc) => ({
+        name: `${acc.email ?? acc.id.slice(0, 12)}.json`,
+        content: toCockpit(acc),
+      })),
+    );
+    setCpaOpen(true);
+  };
+
+  /// Open the CPA push dialog for a single account.
+  const handlePushAccount = (account: CodexAccount) => {
+    setCpaFiles([
+      { name: `${account.email ?? account.id.slice(0, 12)}.json`, content: toCockpit(account) },
+    ]);
+    setCpaOpen(true);
+  };
+
   const loadHistory = (r: BatchResult) => {
     setResult(r);
     setHistoryOpen(false);
@@ -280,6 +306,8 @@ export function App() {
                       onCopyAccount={handleCopyAccount}
                       onDownload={handleDownload}
                       onDownloadAccount={handleDownloadAccount}
+                      onPushAll={handlePushAll}
+                      onPushAccount={handlePushAccount}
                     />
                   )}
                 </Paper>
@@ -301,6 +329,13 @@ export function App() {
           onSelect={(entry) => loadHistory(entry.result)}
           onRemove={history.remove}
           onClear={history.clear}
+        />
+
+        <CpaUploadDialog
+          open={cpaOpen}
+          onClose={() => setCpaOpen(false)}
+          files={cpaFiles}
+          onToast={setToast}
         />
 
         <Backdrop open={loading} sx={{ zIndex: (t) => t.zIndex.drawer + 1 }}>

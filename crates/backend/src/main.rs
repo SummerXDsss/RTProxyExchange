@@ -1,6 +1,7 @@
 //! Codex Token converter backend server (Axum).
 
 mod api;
+mod cpa;
 mod split;
 
 use std::{net::SocketAddr, sync::Arc};
@@ -46,6 +47,8 @@ async fn main() {
         .route("/api/update", get(api::check_update))
         .route("/api/split", post(split::split))
         .route("/api/split/zip", post(split::split_zip))
+        .route("/api/cpa/test", post(cpa::test_connection))
+        .route("/api/cpa/upload", post(cpa::upload))
         .with_state(state)
         .layer(cors);
 

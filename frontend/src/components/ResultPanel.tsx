@@ -2,6 +2,7 @@ import {
   Alert,
   AlertTitle,
   Box,
+  Button,
   Chip,
   Divider,
   List,
@@ -12,6 +13,7 @@ import {
 } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DownloadIcon from "@mui/icons-material/Download";
+import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import type { BatchResult, CodexAccount, ConvertResponse, DryRunResult } from "../types";
 import { isDryRun } from "../types";
 import type { OutputFormat } from "../formats";
@@ -24,6 +26,8 @@ interface Props {
   onCopyAccount: (account: CodexAccount, format: OutputFormat) => void;
   onDownload: (format: OutputFormat) => void;
   onDownloadAccount: (account: CodexAccount, format: OutputFormat) => void;
+  onPushAll: () => void;
+  onPushAccount: (account: CodexAccount) => void;
 }
 
 /// Summary stat chips for a batch result.
@@ -64,12 +68,14 @@ function BatchView({
   onCopyAccount,
   onDownload,
   onDownloadAccount,
+  onPushAll,
+  onPushAccount,
 }: Props & { result: BatchResult }) {
   return (
     <Stack spacing={2}>
       <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" useFlexGap>
         <StatChips result={result} />
-        <Stack direction="row" spacing={1}>
+        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
           <FormatMenuButton
             label="复制 JSON"
             icon={<ContentCopyIcon />}
@@ -79,10 +85,18 @@ function BatchView({
           <FormatMenuButton
             label="下载"
             icon={<DownloadIcon />}
-            variant="contained"
             onPick={onDownload}
             disabled={result.accounts.length === 0}
           />
+          <Button
+            size="small"
+            variant="contained"
+            startIcon={<CloudUploadIcon />}
+            onClick={onPushAll}
+            disabled={result.accounts.length === 0}
+          >
+            添加到 CLIProxyAPI
+          </Button>
         </Stack>
       </Stack>
 
@@ -111,6 +125,7 @@ function BatchView({
                 account={acc}
                 onCopy={onCopyAccount}
                 onDownload={onDownloadAccount}
+                onPush={onPushAccount}
               />
             ))}
           </Stack>

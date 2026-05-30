@@ -9,8 +9,10 @@ import {
 } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DownloadIcon from "@mui/icons-material/Download";
+import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import PersonIcon from "@mui/icons-material/Person";
+import { Button } from "@mui/material";
 import type { CodexAccount } from "../types";
 import type { OutputFormat } from "../formats";
 import { FormatMenuButton } from "./FormatMenuButton";
@@ -19,6 +21,7 @@ interface Props {
   account: CodexAccount;
   onCopy: (account: CodexAccount, format: OutputFormat) => void;
   onDownload: (account: CodexAccount, format: OutputFormat) => void;
+  onPush: (account: CodexAccount) => void;
 }
 
 /// Truncate a long token for display.
@@ -41,7 +44,7 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 /// Expandable card showing a single converted CPA account.
-export function AccountCard({ account, onCopy, onDownload }: Props) {
+export function AccountCard({ account, onCopy, onDownload, onPush }: Props) {
   return (
     <Accordion disableGutters>
       <AccordionSummary expandIcon={<ExpandMoreIcon />}>
@@ -71,6 +74,14 @@ export function AccountCard({ account, onCopy, onDownload }: Props) {
               size="small"
               onPick={(format) => onDownload(account, format)}
             />
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<CloudUploadIcon fontSize="small" />}
+              onClick={() => onPush(account)}
+            >
+              添加到 CPA
+            </Button>
           </Stack>
           <Field label="ID (SHA256)" value={shorten(account.id, 20, 12)} />
           <Field label="User ID" value={account.user_id} />

@@ -14,6 +14,7 @@ import {
   Typography,
 } from "@mui/material";
 import CallSplitIcon from "@mui/icons-material/CallSplit";
+import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DownloadIcon from "@mui/icons-material/Download";
 import FolderZipIcon from "@mui/icons-material/FolderZip";
@@ -22,6 +23,7 @@ import { useRef, useState } from "react";
 import { downloadSplitZip, splitAccounts } from "../api";
 import { dateStamp } from "../formats";
 import type { SplitAccount, SplitFormat, SplitResult } from "../types";
+import { CpaUploadDialog, type UploadFile } from "./CpaUploadDialog";
 
 interface Props {
   onToast: (message: string) => void;
@@ -128,6 +130,8 @@ export function SplitPanel({ onToast }: Props) {
   const [result, setResult] = useState<SplitResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [cpaOpen, setCpaOpen] = useState(false);
+  const [cpaFiles, setCpaFiles] = useState<UploadFile[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -172,6 +176,18 @@ export function SplitPanel({ onToast }: Props) {
     const payloads = result.accounts.map((a) => (format === "cpa" ? a.cpa : a.sub2api));
     await navigator.clipboard.writeText(JSON.stringify(payloads, null, 2));
     onToast(`已复制全部 ${result.total} 个账号的 ${format.toUpperCase()} JSON`);
+  };
+
+  /// Open the CPA push dialog for all split accounts (CPA single-object form).
+  const pushAllToCpa = () => {
+    if (!result) return;
+    setCpaFiles(
+      result.accounts.map((a) => ({
+        name: `${accountSlug(a)}.json`,
+        content: a.cpa,
+      })),
+    );
+    setCpaOpen(true);
   };
 
   const downloadZip = async (formats: SplitFormat[]) => {
@@ -284,6 +300,15 @@ export function SplitPanel({ onToast }: Props) {
               >
                 复制全部 Sub2API
               </Button>
+              <Button
+                size="small"
+                variant="contained"
+                startIcon={<CloudUploadIcon />}
+                onClick={pushAllToCpa}
+                disabled={busy}
+              >
+                添加到 CLIProxyAPI
+              </Button>
             </Stack>
 
             <List dense sx={{ maxHeight: 360, overflow: "auto" }}>
@@ -299,6 +324,13 @@ export function SplitPanel({ onToast }: Props) {
           </Box>
         )}
       </Stack>
+
+      <CpaUploadDialog
+        open={cpaOpen}
+        onClose={() => setCpaOpen(false)}
+        files={cpaFiles}
+        onToast={onToast}
+      />
     </Paper>
   );
 }

@@ -2,6 +2,7 @@ import type {
   BackendConfig,
   ConvertRequest,
   ConvertResponse,
+  CpaUploadResponse,
   ProgressEvent,
   SplitFormat,
   SplitResult,
@@ -79,6 +80,35 @@ export async function downloadSplitZip(
 /// Check for updates against the project's GitHub releases/tags.
 export async function checkUpdate(refresh = false): Promise<UpdateStatus> {
   const resp = await fetch(`/api/update${refresh ? "?refresh=1" : ""}`);
+  if (!resp.ok) throw new Error(await errorMessage(resp));
+  return resp.json();
+}
+
+/// Test connectivity + management auth against a CLIProxyAPI instance.
+export async function cpaTest(
+  baseUrl: string,
+  managementKey: string,
+): Promise<{ ok: boolean; cpa_version?: string }> {
+  const resp = await fetch("/api/cpa/test", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ base_url: baseUrl, management_key: managementKey }),
+  });
+  if (!resp.ok) throw new Error(await errorMessage(resp));
+  return resp.json();
+}
+
+/// Upload one or more CPA account files to a CLIProxyAPI instance.
+export async function cpaUpload(
+  baseUrl: string,
+  managementKey: string,
+  files: { name: string; content: unknown }[],
+): Promise<CpaUploadResponse> {
+  const resp = await fetch("/api/cpa/upload", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ base_url: baseUrl, management_key: managementKey, files }),
+  });
   if (!resp.ok) throw new Error(await errorMessage(resp));
   return resp.json();
 }

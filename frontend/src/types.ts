@@ -143,6 +143,21 @@ export interface UpdateStatus {
   error: string | null;
 }
 
+/// Per-file CPA upload outcome.
+export interface CpaUploadItem {
+  name: string;
+  ok: boolean;
+  error: string | null;
+}
+
+/// Aggregated CPA upload response.
+export interface CpaUploadResponse {
+  total: number;
+  success: number;
+  failed: number;
+  results: CpaUploadItem[];
+}
+
 /// A saved run in local history.
 export interface HistoryEntry {
   id: string;
