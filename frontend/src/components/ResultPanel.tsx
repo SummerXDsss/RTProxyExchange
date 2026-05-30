@@ -28,6 +28,7 @@ interface Props {
   onDownloadAccount: (account: CodexAccount, format: OutputFormat) => void;
   onPushAll: () => void;
   onPushAccount: (account: CodexAccount) => void;
+  onToast: (message: string) => void;
 }
 
 /// Summary stat chips for a batch result.
@@ -70,6 +71,7 @@ function BatchView({
   onDownloadAccount,
   onPushAll,
   onPushAccount,
+  onToast,
 }: Props & { result: BatchResult }) {
   return (
     <Stack spacing={2}>
@@ -126,6 +128,7 @@ function BatchView({
                 onCopy={onCopyAccount}
                 onDownload={onDownloadAccount}
                 onPush={onPushAccount}
+                onToast={onToast}
               />
             ))}
           </Stack>

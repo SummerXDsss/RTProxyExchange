@@ -308,6 +308,7 @@ export function App() {
                       onDownloadAccount={handleDownloadAccount}
                       onPushAll={handlePushAll}
                       onPushAccount={handlePushAccount}
+                      onToast={setToast}
                     />
                   )}
                 </Paper>
