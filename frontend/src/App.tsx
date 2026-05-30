@@ -35,9 +35,12 @@ import { useHistory } from "./hooks/useHistory";
 import type { BatchResult, CodexAccount, ConvertResponse, ProgressRow } from "./types";
 import { isDryRun } from "./types";
 import {
+  accountFilename,
   batchFilename,
+  batchIsSingleFile,
   serializeAccount,
   serializeBatch,
+  toCockpit,
   type OutputFormat,
 } from "./formats";
 
@@ -169,13 +172,28 @@ export function App() {
 
   const handleDownload = (format: OutputFormat) => {
     const accounts = resultAccounts();
-    if (accounts) {
-      downloadText(serializeBatch(accounts, format), batchFilename(format), `已下载 ${batchFilename(format)}`);
+    if (!accounts || accounts.length === 0) return;
+
+    // CPA only accepts a single object {} per file. For multiple accounts,
+    // download one valid {} file each instead of an (invalid) array file.
+    if (!batchIsSingleFile(accounts, format)) {
+      accounts.forEach((acc) => {
+        downloadText(
+          JSON.stringify(toCockpit(acc), null, 2),
+          accountFilename(acc.email, format),
+          "",
+        );
+      });
+      setToast(`已分别下载 ${accounts.length} 个 CPA 文件`);
+      return;
     }
+
+    const name = batchFilename(format);
+    downloadText(serializeBatch(accounts, format), name, `已下载 ${name}`);
   };
 
   const handleDownloadAccount = (account: CodexAccount, format: OutputFormat) => {
-    const name = `${account.email ?? account.id.slice(0, 12)}.${format}.json`;
+    const name = accountFilename(account.email, format);
     downloadText(serializeAccount(account, format), name, `已下载 ${name}`);
   };
 

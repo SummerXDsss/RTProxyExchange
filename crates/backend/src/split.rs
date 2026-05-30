@@ -63,6 +63,29 @@ fn bad_request(message: String) -> Response {
     (StatusCode::BAD_REQUEST, Json(SplitError { error: message })).into_response()
 }
 
+/// Current UTC date as `YYYY-MM-DD` for filenames.
+fn date_stamp() -> String {
+    chrono::Utc::now().format("%Y-%m-%d").to_string()
+}
+
+/// Filesystem-safe email for a split account, falling back to its file base.
+fn email_slug(account: &codex_core::transform::SplitAccount) -> String {
+    let raw = account
+        .email
+        .as_deref()
+        .filter(|s| !s.is_empty())
+        .unwrap_or(&account.filename_base);
+    raw.chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | '@') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
 /// Parse input and return per-account split metadata + both-format payloads.
 pub async fn split(Json(req): Json<SplitRequest>) -> Response {
     match split_accounts(&req.input) {
@@ -89,12 +112,18 @@ fn build_zip(result: &SplitResult, formats: &[SplitFormat]) -> std::io::Result<V
 
         for account in &result.accounts {
             for &format in &formats {
-                // When both formats are requested, disambiguate with a suffix
-                // and group into subfolders; otherwise use a flat name.
+                // File name: {email}-{format}-{date}.json. When both formats are
+                // requested, group into per-format subfolders to avoid clashes.
+                let leaf = format!(
+                    "{}-{}-{}.json",
+                    email_slug(account),
+                    format.suffix(),
+                    date_stamp()
+                );
                 let name = if both {
-                    format!("{}/{}.json", format.suffix(), account.filename_base)
+                    format!("{}/{}", format.suffix(), leaf)
                 } else {
-                    format!("{}.json", account.filename_base)
+                    leaf
                 };
 
                 let json = match format {

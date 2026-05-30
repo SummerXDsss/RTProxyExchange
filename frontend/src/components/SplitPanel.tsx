@@ -20,10 +20,17 @@ import FolderZipIcon from "@mui/icons-material/FolderZip";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import { useRef, useState } from "react";
 import { downloadSplitZip, splitAccounts } from "../api";
+import { dateStamp } from "../formats";
 import type { SplitAccount, SplitFormat, SplitResult } from "../types";
 
 interface Props {
   onToast: (message: string) => void;
+}
+
+/// Filesystem-safe email/name for a split account.
+function accountSlug(account: SplitAccount): string {
+  const raw = account.email && account.email.trim() ? account.email : account.filename_base;
+  return raw.replace(/[^A-Za-z0-9.@_-]/g, "_");
 }
 
 const SAMPLE = `粘贴号商发的账号数据，支持：
@@ -105,7 +112,7 @@ function AccountRow({
     >
       <ListItemText
         primary={account.email ?? "(无邮箱)"}
-        secondary={`${account.filename_base}.json`}
+        secondary={`${accountSlug(account)}-{cpa|sub2api}-${dateStamp()}.json`}
         slotProps={{
           primary: { sx: { fontSize: 14 } },
           secondary: { sx: { fontFamily: "monospace", fontSize: 12 } },
@@ -149,8 +156,9 @@ export function SplitPanel({ onToast }: Props) {
 
   const downloadOne = (account: SplitAccount, format: SplitFormat) => {
     const payload = format === "cpa" ? account.cpa : account.sub2api;
-    saveJson(payload, `${account.filename_base}.${format}.json`);
-    onToast(`已下载 ${account.filename_base}.${format}.json`);
+    const name = `${accountSlug(account)}-${format}-${dateStamp()}.json`;
+    saveJson(payload, name);
+    onToast(`已下载 ${name}`);
   };
 
   const copyOne = async (account: SplitAccount, format: SplitFormat) => {
@@ -188,7 +196,8 @@ export function SplitPanel({ onToast }: Props) {
         </Stack>
 
         <Alert severity="info" variant="outlined" sx={{ py: 0.5 }}>
-          纯本地拆分，不会刷新 Token。每个账号按 <code>codex_{"{email}"}.json</code> 命名。
+          纯本地拆分，不会刷新 Token。每个账号按 <code>{"{email}"}-{"{格式}"}-{"{日期}"}.json</code> 命名。
+          CPA 为单个对象 <code>{"{}"}</code>，可直接上传 CLIProxyAPI。
         </Alert>
 
         {error && (

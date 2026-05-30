@@ -98,21 +98,57 @@ export function toSub2apiExport(accounts: CodexAccount[]): Sub2apiExport {
   };
 }
 
-/// Serialize a batch of accounts in the chosen format as pretty JSON.
-export function serializeBatch(accounts: CodexAccount[], format: OutputFormat): string {
-  const value =
-    format === "cpa" ? accounts.map(toCockpit) : toSub2apiExport(accounts);
-  return JSON.stringify(value, null, 2);
-}
-
 /// Serialize a single account in the chosen format as pretty JSON.
+/// CPA is always a single object `{}` (CLIProxyAPI rejects arrays). Sub2API is
+/// its standard wrapper object.
 export function serializeAccount(account: CodexAccount, format: OutputFormat): string {
   const value =
     format === "cpa" ? toCockpit(account) : toSub2apiExport([account]);
   return JSON.stringify(value, null, 2);
 }
 
+/// Serialize accounts for a "batch" action.
+/// - sub2api: one wrapper object containing all accounts (valid for upload).
+/// - cpa: CLIProxyAPI only accepts a single `{}` per file. A single account is
+///   emitted as one object; multiple accounts must be exported per-file instead
+///   (see `downloadAccountsSeparately`), so this returns an array purely for
+///   clipboard preview and should not be used as an uploadable CPA file.
+export function serializeBatch(accounts: CodexAccount[], format: OutputFormat): string {
+  if (format === "sub2api") {
+    return JSON.stringify(toSub2apiExport(accounts), null, 2);
+  }
+  // CPA
+  const value = accounts.length === 1 ? toCockpit(accounts[0]) : accounts.map(toCockpit);
+  return JSON.stringify(value, null, 2);
+}
+
+/// Whether a batch action can be a single uploadable file in this format.
+export function batchIsSingleFile(accounts: CodexAccount[], format: OutputFormat): boolean {
+  // Sub2API always wraps into one file; CPA only when there is exactly one account.
+  return format === "sub2api" || accounts.length <= 1;
+}
+
+/// Zero-padded local date stamp, e.g. "2026-05-31".
+export function dateStamp(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/// Filesystem-safe email (keeps @ . - _, replaces the rest with _).
+function sanitizeEmail(email: string | null): string {
+  const base = email && email.trim() ? email : "account";
+  return base.replace(/[^A-Za-z0-9.@_-]/g, "_");
+}
+
+/// Per-account filename: `{email}-{format}-{date}.json`.
+export function accountFilename(email: string | null, format: OutputFormat): string {
+  return `${sanitizeEmail(email)}-${format}-${dateStamp()}.json`;
+}
+
 /// Suggested download filename for a batch in the chosen format.
 export function batchFilename(format: OutputFormat): string {
-  return format === "cpa" ? "accounts.cpa.json" : "accounts.sub2api.json";
+  return format === "cpa"
+    ? `accounts-cpa-${dateStamp()}.json`
+    : `accounts-sub2api-${dateStamp()}.json`;
 }
