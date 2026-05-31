@@ -55,7 +55,11 @@ pub struct CpaAccount {
     pub access_token: String,
     #[serde(default)]
     pub refresh_token: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        alias = "chatgpt_account_id",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub account_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_refresh: Option<String>,

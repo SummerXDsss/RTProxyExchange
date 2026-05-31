@@ -27,7 +27,7 @@ import { InputPanel, type Mode } from "./components/InputPanel";
 import { HistoryDrawer } from "./components/HistoryDrawer";
 import { ProgressPanel } from "./components/ProgressPanel";
 import { ResultPanel } from "./components/ResultPanel";
-import { SplitPanel } from "./components/SplitPanel";
+import { SplitPanel, FREE_SAMPLE } from "./components/SplitPanel";
 import { TransformPanel } from "./components/TransformPanel";
 import { UpdatePanel } from "./components/UpdatePanel";
 import { CpaUploadDialog, type UploadFile } from "./components/CpaUploadDialog";
@@ -263,6 +263,7 @@ export function App() {
             <Tab label="转换 / 登录" />
             <Tab label="格式转换" />
             <Tab label="账号拆分" />
+            <Tab label="Free 号转换" />
             <Tab label="检查更新" />
           </Tabs>
 
@@ -318,6 +319,18 @@ export function App() {
             <TransformPanel onToast={setToast} />
           ) : tab === 2 ? (
             <SplitPanel onToast={setToast} />
+          ) : tab === 3 ? (
+            <SplitPanel
+              onToast={setToast}
+              title="Free 号转换"
+              description={
+                <>
+                  从 Free 号 JSON 提取 Refresh Token，换出 CPA / Sub2API。纯本地处理，不刷新 Token。
+                  CPA 为单个对象，可直接上传 CLIProxyAPI。
+                </>
+              }
+              sample={FREE_SAMPLE}
+            />
           ) : (
             <UpdatePanel onToast={setToast} />
           )}

@@ -27,6 +27,12 @@ import { CpaUploadDialog, type UploadFile } from "./CpaUploadDialog";
 
 interface Props {
   onToast: (message: string) => void;
+  /// Panel title (defaults to the account-split wording).
+  title?: string;
+  /// Info text under the title.
+  description?: React.ReactNode;
+  /// Placeholder/sample text for the input box.
+  sample?: string;
 }
 
 /// Filesystem-safe email/name for a split account.
@@ -42,6 +48,14 @@ const SAMPLE = `粘贴号商发的账号数据，支持：
 
 每个账号会按 codex_{email}.json 命名，
 可单独下载 CPA / Sub2API，或打包成 zip。`;
+
+const FREE_SAMPLE = `粘贴 Free 号 JSON（号商常见格式），支持：
+• 单个账号对象 { "version":1, "refresh_token":"rt_...", ... }
+• 账号数组 [{ ... }, { ... }]
+
+自动提取 refresh / access / id token，
+换出 CPA / Sub2API，可下载或打包 zip。`;
+export { FREE_SAMPLE };
 
 /// Trigger a browser download for a blob.
 function saveBlob(blob: Blob, filename: string) {
@@ -125,7 +139,7 @@ function AccountRow({
 }
 
 /// Account-split UI: parse a batch, list accounts, download per-account or zip.
-export function SplitPanel({ onToast }: Props) {
+export function SplitPanel({ onToast, title, description, sample }: Props) {
   const [input, setInput] = useState("");
   const [result, setResult] = useState<SplitResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -208,12 +222,17 @@ export function SplitPanel({ onToast }: Props) {
       <Stack spacing={2}>
         <Stack direction="row" spacing={1.5} alignItems="center">
           <CallSplitIcon color="primary" />
-          <Typography variant="subtitle1">账号拆分</Typography>
+          <Typography variant="subtitle1">{title ?? "账号拆分"}</Typography>
         </Stack>
 
         <Alert severity="info" variant="outlined" sx={{ py: 0.5 }}>
-          纯本地拆分，不会刷新 Token。每个账号按 <code>{"{email}"}-{"{格式}"}-{"{日期}"}.json</code> 命名。
-          CPA 为单个对象 <code>{"{}"}</code>，可直接上传 CLIProxyAPI。
+          {description ?? (
+            <>
+              纯本地拆分，不会刷新 Token。每个账号按{" "}
+              <code>{"{email}"}-{"{格式}"}-{"{日期}"}.json</code> 命名。 CPA 为单个对象{" "}
+              <code>{"{}"}</code>，可直接上传 CLIProxyAPI。
+            </>
+          )}
         </Alert>
 
         {error && (
@@ -238,7 +257,7 @@ export function SplitPanel({ onToast }: Props) {
           minRows={10}
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder={SAMPLE}
+          placeholder={sample ?? SAMPLE}
           fullWidth
           slotProps={{ htmlInput: { style: { fontFamily: "monospace", fontSize: 12 } } }}
         />

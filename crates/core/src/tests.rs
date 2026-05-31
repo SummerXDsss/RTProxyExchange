@@ -337,3 +337,47 @@ fn filename_base_fallbacks() {
     assert_eq!(filename_base(None, Some("acc-1"), 0), "codex_acc-1");
     assert_eq!(filename_base(None, None, 3), "codex_account_3");
 }
+
+#[test]
+fn parse_free_account_format() {
+    use crate::transform::{parse_cpa_accounts, split_accounts};
+
+    // Free-号 format: top-level version + chatgpt_account_id (not account_id),
+    // plus many extra fields that must be ignored.
+    let free = serde_json::json!({
+        "version": 1,
+        "db_id": 70994,
+        "platform": "chatgpt",
+        "email": "free@example.com",
+        "password": "secret",
+        "access_token": "at",
+        "refresh_token": "rt_free",
+        "id_token": "it",
+        "client_id": "app_x",
+        "chatgpt_account_id": "acc-free",
+        "chatgpt_user_id": "user-free",
+        "organization_id": "org-free",
+        "mailbox": { "provider": "microsoft" }
+    });
+
+    let accounts = parse_cpa_accounts(&free.to_string()).unwrap();
+    assert_eq!(accounts.len(), 1);
+    let a = &accounts[0];
+    assert_eq!(a.email.as_deref(), Some("free@example.com"));
+    assert_eq!(a.refresh_token, "rt_free");
+    // chatgpt_account_id is read into account_id via serde alias.
+    assert_eq!(a.account_id.as_deref(), Some("acc-free"));
+
+    // Split produces both formats with chatgpt fields populated.
+    let result = split_accounts(&free.to_string()).unwrap();
+    assert_eq!(result.total, 1);
+    let s = &result.accounts[0];
+    assert_eq!(
+        s.sub2api.accounts[0]
+            .credentials
+            .chatgpt_account_id
+            .as_deref(),
+        Some("acc-free")
+    );
+    assert_eq!(s.sub2api.accounts[0].credentials.refresh_token, "rt_free");
+}
