@@ -33,6 +33,10 @@ pub enum CoreError {
     #[error("failed to parse json: {0}")]
     JsonParse(String),
 
+    /// Failed during the browser OAuth handoff flow.
+    #[error("oauth flow error: {0}")]
+    OAuthFlow(String),
+
     /// The input did not contain a usable refresh token.
     #[error("no refresh token found in input")]
     NoRefreshToken,

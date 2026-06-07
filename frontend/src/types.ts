@@ -55,6 +55,18 @@ export interface ConvertRequest {
   dry_run?: boolean;
 }
 
+export interface OAuthStartResponse {
+  session_id: string;
+  auth_url: string;
+  redirect_uri: string;
+  expires_in_secs: number;
+}
+
+export interface OAuthExchangeResponse {
+  refresh_token: string;
+  email: string | null;
+}
+
 // A batch result has `accounts`; a dry-run result has `token_previews`.
 export type ConvertResponse = BatchResult | DryRunResult;
 

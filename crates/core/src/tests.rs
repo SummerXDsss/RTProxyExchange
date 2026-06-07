@@ -381,3 +381,25 @@ fn parse_free_account_format() {
     );
     assert_eq!(s.sub2api.accounts[0].credentials.refresh_token, "rt_free");
 }
+
+#[test]
+fn oauth_callback_url_parses_code_and_state() {
+    let callback = "http://localhost:1455/auth/callback?code=abc123&state=state456&ignored=yes";
+    let parsed = crate::oauth::parse_callback_url(callback).unwrap();
+    assert_eq!(parsed.code, "abc123");
+    assert_eq!(parsed.state, "state456");
+}
+
+#[test]
+fn oauth_start_uses_codex_redirect_and_pkce() {
+    let session = crate::oauth::create_pkce_session(&crate::config::RefreshConfig::default())
+        .expect("create oauth session");
+    assert_eq!(
+        session.redirect_uri,
+        crate::oauth::DEFAULT_REDIRECT_URI.to_string()
+    );
+    assert!(session.auth_url.contains("code_challenge_method=S256"));
+    assert!(session.auth_url.contains("codex_cli_simplified_flow=true"));
+    assert!(!session.code_verifier.is_empty());
+    assert!(!session.state.is_empty());
+}

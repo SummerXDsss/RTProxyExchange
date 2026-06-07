@@ -11,6 +11,7 @@ pub mod file_config;
 pub mod input;
 pub mod jwt;
 pub mod models;
+pub mod oauth;
 pub mod refresher;
 pub mod transform;
 pub mod update;

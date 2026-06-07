@@ -3,6 +3,8 @@ import type {
   ConvertRequest,
   ConvertResponse,
   CpaUploadResponse,
+  OAuthExchangeResponse,
+  OAuthStartResponse,
   ProgressEvent,
   SplitFormat,
   SplitResult,
@@ -36,6 +38,28 @@ export async function convert(req: ConvertRequest): Promise<ConvertResponse> {
 /// Fetch effective backend config (no client_id; that is internal).
 export async function fetchConfig(): Promise<BackendConfig> {
   const resp = await fetch("/api/config");
+  if (!resp.ok) throw new Error(await errorMessage(resp));
+  return resp.json();
+}
+
+/// Start manual Codex OAuth. The backend only creates PKCE state and returns
+/// the browser auth URL; users paste the final callback URL back for exchange.
+export async function oauthStart(): Promise<OAuthStartResponse> {
+  const resp = await fetch("/api/oauth/start", { method: "POST" });
+  if (!resp.ok) throw new Error(await errorMessage(resp));
+  return resp.json();
+}
+
+/// Exchange a pasted localhost callback URL for a refresh token.
+export async function oauthExchange(
+  sessionId: string,
+  callbackUrl: string,
+): Promise<OAuthExchangeResponse> {
+  const resp = await fetch("/api/oauth/exchange", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId, callback_url: callbackUrl }),
+  });
   if (!resp.ok) throw new Error(await errorMessage(resp));
   return resp.json();
 }

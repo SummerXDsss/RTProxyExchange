@@ -14,6 +14,7 @@ import {
 import Grid from "@mui/material/Grid2";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import LoginIcon from "@mui/icons-material/Login";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import PlaylistAddCheckIcon from "@mui/icons-material/PlaylistAddCheck";
 import SearchIcon from "@mui/icons-material/Search";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
@@ -33,6 +34,12 @@ interface Props {
   loading: boolean;
   onConvert: () => void;
   onDryRun: () => void;
+  oauthAuthUrl: string;
+  oauthRedirectUri: string;
+  oauthCallbackUrl: string;
+  onOAuthStart: () => void;
+  onOAuthCallbackChange: (value: string) => void;
+  onOAuthExchange: () => void;
 }
 
 const SINGLE_PLACEHOLDER = `粘贴单个 Refresh Token 登录：
@@ -74,9 +81,54 @@ export function InputPanel(props: Props) {
       </ToggleButtonGroup>
 
       {single && (
-        <Alert severity="info" variant="outlined" sx={{ py: 0.5 }}>
-          仅需 Refresh Token，无需 ClientID。
-        </Alert>
+        <Stack spacing={1.25}>
+          <Alert severity="info" variant="outlined" sx={{ py: 0.5 }}>
+            可直接粘贴 Refresh Token，也可以通过 OAuth 登录获取 RT。
+          </Alert>
+          <Button
+            variant="outlined"
+            startIcon={<OpenInNewIcon />}
+            onClick={props.onOAuthStart}
+            disabled={props.loading}
+          >
+            OAuth 获取 RT
+          </Button>
+
+          {props.oauthAuthUrl && (
+            <Stack spacing={1.25}>
+              <Alert severity="success" variant="outlined" sx={{ py: 0.5 }}>
+                授权页打开后，登录完成会跳到本地 callback。页面打不开没关系，把地址栏里的完整链接粘贴回来。
+              </Alert>
+              <TextField
+                label="授权链接"
+                value={props.oauthAuthUrl}
+                fullWidth
+                size="small"
+                slotProps={{
+                  input: { readOnly: true },
+                  htmlInput: { style: { fontFamily: "monospace", fontSize: 12 } },
+                }}
+              />
+              <TextField
+                label="回调链接"
+                value={props.oauthCallbackUrl}
+                onChange={(e) => props.onOAuthCallbackChange(e.target.value)}
+                placeholder={`${props.oauthRedirectUri || "http://localhost:1455/auth/callback"}?code=...&state=...`}
+                fullWidth
+                multiline
+                minRows={2}
+                slotProps={{ htmlInput: { style: { fontFamily: "monospace", fontSize: 12 } } }}
+              />
+              <Button
+                variant="contained"
+                onClick={props.onOAuthExchange}
+                disabled={props.loading || !props.oauthCallbackUrl.trim()}
+              >
+                回传并填入 RT
+              </Button>
+            </Stack>
+          )}
+        </Stack>
       )}
 
       <TextField

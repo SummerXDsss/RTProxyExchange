@@ -22,7 +22,7 @@ import HistoryIcon from "@mui/icons-material/History";
 import LightModeIcon from "@mui/icons-material/LightMode";
 import TransformIcon from "@mui/icons-material/Transform";
 import { useState } from "react";
-import { convert, convertStream } from "./api";
+import { convert, convertStream, oauthExchange, oauthStart } from "./api";
 import { InputPanel, type Mode } from "./components/InputPanel";
 import { HistoryDrawer } from "./components/HistoryDrawer";
 import { ProgressPanel } from "./components/ProgressPanel";
@@ -54,6 +54,10 @@ export function App() {
   const [input, setInput] = useState("");
   const [timeout, setTimeout] = useState("");
   const [concurrency, setConcurrency] = useState("4");
+  const [oauthSessionId, setOauthSessionId] = useState("");
+  const [oauthAuthUrl, setOauthAuthUrl] = useState("");
+  const [oauthRedirectUri, setOauthRedirectUri] = useState("");
+  const [oauthCallbackUrl, setOauthCallbackUrl] = useState("");
 
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ConvertResponse | null>(null);
@@ -142,6 +146,52 @@ export function App() {
   const handleConvert = () => {
     if (inputMode === "single") runSimple(false);
     else runStreaming();
+  };
+
+  const handleOAuthStart = async () => {
+    const popup = window.open("about:blank", "_blank");
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await oauthStart();
+      setOauthSessionId(res.session_id);
+      setOauthAuthUrl(res.auth_url);
+      setOauthRedirectUri(res.redirect_uri);
+      setOauthCallbackUrl("");
+
+      if (popup) popup.location.href = res.auth_url;
+      else window.open(res.auth_url, "_blank", "noopener,noreferrer");
+      setToast("已打开 OAuth 授权页");
+    } catch (e) {
+      popup?.close();
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOAuthExchange = async () => {
+    if (!oauthSessionId) {
+      setError("请先获取 OAuth 授权链接");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await oauthExchange(oauthSessionId, oauthCallbackUrl);
+      setInputMode("single");
+      setInput(res.refresh_token);
+      setOauthSessionId("");
+      setOauthAuthUrl("");
+      setOauthRedirectUri("");
+      setOauthCallbackUrl("");
+      setToast(res.email ? `已获取 RT：${res.email}` : "已获取 RT");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
   };
 
   /// The accounts of the current batch result, or null for dry-run/empty.
@@ -289,6 +339,12 @@ export function App() {
                     loading={loading || streaming}
                     onConvert={handleConvert}
                     onDryRun={() => runSimple(true)}
+                    oauthAuthUrl={oauthAuthUrl}
+                    oauthRedirectUri={oauthRedirectUri}
+                    oauthCallbackUrl={oauthCallbackUrl}
+                    onOAuthStart={handleOAuthStart}
+                    onOAuthCallbackChange={setOauthCallbackUrl}
+                    onOAuthExchange={handleOAuthExchange}
                   />
                 </Paper>
               </Grid>

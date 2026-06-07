@@ -31,6 +31,7 @@ async fn main() {
     let state = AppState {
         default_config: Arc::new(build_config_from_env()),
         update_cache: Arc::new(tokio::sync::Mutex::new(None)),
+        oauth_sessions: Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
     };
 
     let cors = CorsLayer::new()
@@ -41,6 +42,8 @@ async fn main() {
     let api = Router::new()
         .route("/api/health", get(api::health))
         .route("/api/config", get(api::config))
+        .route("/api/oauth/start", post(api::oauth_start))
+        .route("/api/oauth/exchange", post(api::oauth_exchange))
         .route("/api/convert", post(api::convert))
         .route("/api/convert/stream", post(api::convert_stream))
         .route("/api/transform", post(api::transform))

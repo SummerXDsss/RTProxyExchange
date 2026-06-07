@@ -1,6 +1,6 @@
 //! HTTP API handlers for the Codex Token converter backend.
 
-use std::{convert::Infallible, sync::Arc, time::Duration};
+use std::{collections::HashMap, convert::Infallible, sync::Arc, time::Duration};
 
 use axum::{
     extract::State,
@@ -19,6 +19,16 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
+const OAUTH_SESSION_TTL: Duration = Duration::from_secs(600);
+
+#[derive(Debug, Clone)]
+pub struct PendingOAuthSession {
+    pub state: String,
+    pub code_verifier: String,
+    pub redirect_uri: String,
+    pub created_at: std::time::Instant,
+}
+
 /// Shared application state.
 #[derive(Clone)]
 pub struct AppState {
@@ -27,6 +37,8 @@ pub struct AppState {
     /// Cached update-check result with its fetch time.
     pub update_cache:
         Arc<tokio::sync::Mutex<Option<(std::time::Instant, codex_core::UpdateStatus)>>>,
+    /// Short-lived PKCE sessions waiting for a pasted callback URL.
+    pub oauth_sessions: Arc<tokio::sync::Mutex<HashMap<String, PendingOAuthSession>>>,
 }
 
 /// Request body for the convert endpoints.
@@ -72,6 +84,29 @@ pub struct DryRunResponse {
 pub enum ConvertResponse {
     Batch(BatchResult),
     DryRun(DryRunResponse),
+}
+
+/// Response returned when starting browser OAuth.
+#[derive(Debug, Serialize)]
+pub struct OAuthStartResponse {
+    pub session_id: String,
+    pub auth_url: String,
+    pub redirect_uri: String,
+    pub expires_in_secs: u64,
+}
+
+/// Request body for exchanging a pasted callback URL.
+#[derive(Debug, Deserialize)]
+pub struct OAuthExchangeRequest {
+    pub session_id: String,
+    pub callback_url: String,
+}
+
+/// Response after exchanging an authorization code.
+#[derive(Debug, Serialize)]
+pub struct OAuthExchangeResponse {
+    pub refresh_token: String,
+    pub email: Option<String>,
 }
 
 /// Error payload returned to clients.
@@ -133,6 +168,86 @@ pub async fn config(State(state): State<AppState>) -> impl IntoResponse {
         "timeout_secs": c.timeout_secs,
         "max_retries": c.max_retries,
         "concurrency": c.concurrency,
+    }))
+}
+
+/// Start a manual browser OAuth handoff. No local callback server is started:
+/// the UI opens `auth_url`, then the user pastes the final callback URL back.
+pub async fn oauth_start(
+    State(state): State<AppState>,
+) -> Result<Json<OAuthStartResponse>, ApiErrorResponse> {
+    let start = codex_core::oauth::create_pkce_session(&state.default_config)
+        .map_err(|e| ApiErrorResponse::internal(e.to_string()))?;
+    let session_id = start.state.clone();
+
+    let mut sessions = state.oauth_sessions.lock().await;
+    sessions.retain(|_, session| session.created_at.elapsed() < OAUTH_SESSION_TTL);
+    sessions.insert(
+        session_id.clone(),
+        PendingOAuthSession {
+            state: start.state,
+            code_verifier: start.code_verifier,
+            redirect_uri: start.redirect_uri.clone(),
+            created_at: std::time::Instant::now(),
+        },
+    );
+
+    Ok(Json(OAuthStartResponse {
+        session_id,
+        auth_url: start.auth_url,
+        redirect_uri: start.redirect_uri,
+        expires_in_secs: OAUTH_SESSION_TTL.as_secs(),
+    }))
+}
+
+/// Exchange the user-pasted callback URL for a refresh token.
+pub async fn oauth_exchange(
+    State(state): State<AppState>,
+    Json(req): Json<OAuthExchangeRequest>,
+) -> Result<Json<OAuthExchangeResponse>, ApiErrorResponse> {
+    let callback = codex_core::oauth::parse_callback_url(&req.callback_url)
+        .map_err(|e| ApiErrorResponse::bad_request(e.to_string()))?;
+
+    let pending = {
+        let mut sessions = state.oauth_sessions.lock().await;
+        sessions.retain(|_, session| session.created_at.elapsed() < OAUTH_SESSION_TTL);
+        let Some(session) = sessions.get(&req.session_id).cloned() else {
+            return Err(ApiErrorResponse::bad_request(
+                "OAuth 会话已过期，请重新获取授权链接",
+            ));
+        };
+        if session.state != callback.state {
+            return Err(ApiErrorResponse::bad_request(
+                "OAuth state 不匹配，请重新获取授权链接",
+            ));
+        }
+        session
+    };
+
+    let tokens = codex_core::oauth::exchange_code_for_tokens(
+        &state.default_config,
+        &callback.code,
+        &pending.code_verifier,
+        &pending.redirect_uri,
+    )
+    .await
+    .map_err(|e| ApiErrorResponse::bad_request(e.to_string()))?;
+
+    if tokens.refresh_token.trim().is_empty() {
+        return Err(ApiErrorResponse::bad_request(
+            "OAuth 未返回 Refresh Token，请重新授权",
+        ));
+    }
+
+    {
+        let mut sessions = state.oauth_sessions.lock().await;
+        sessions.remove(&req.session_id);
+    }
+
+    let info = codex_core::jwt::extract_user_info(&tokens);
+    Ok(Json(OAuthExchangeResponse {
+        refresh_token: tokens.refresh_token,
+        email: info.email,
     }))
 }
 
