@@ -44,6 +44,7 @@ function accountSlug(account: SplitAccount): string {
 const SAMPLE = `粘贴号商发的账号数据，支持：
 • 单个账号对象 { ... }
 • 账号数组 [{ ... }, { ... }]
+• 多段裸对象 { ... } 换行 { ... }
 • Sub2API 导出 JSON
 
 每个账号会按 codex_{email}.json 命名，
@@ -52,6 +53,7 @@ const SAMPLE = `粘贴号商发的账号数据，支持：
 const FREE_SAMPLE = `粘贴 Free 号 JSON（号商常见格式），支持：
 • 单个账号对象 { "version":1, "refresh_token":"rt_...", ... }
 • 账号数组 [{ ... }, { ... }]
+• 多段裸对象 { ... } 换行 { ... }
 
 自动提取 refresh / access / id token，
 换出 CPA / Sub2API，可下载或打包 zip。`;

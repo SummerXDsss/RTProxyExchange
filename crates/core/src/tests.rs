@@ -137,6 +137,21 @@ fn parse_input_json_array() {
 }
 
 #[test]
+fn parse_input_bare_json_object_stream() {
+    let input = r#"
+{"refresh_token":"v1.a","note":"literal } brace"}
+{"tokens":{"refresh_token":"v1.b"}}
+"#;
+    assert_eq!(parse_input(input).unwrap(), vec!["v1.a", "v1.b"]);
+
+    let comma_separated = r#"
+{"refresh_token":"v1.c"},
+{"refreshToken":"v1.d"}
+"#;
+    assert_eq!(parse_input(comma_separated).unwrap(), vec!["v1.c", "v1.d"]);
+}
+
+#[test]
 fn sub2api_detection() {
     let export = json!({ "exported_at": "now", "accounts": [] });
     assert!(looks_like_sub2api_export(&export));
@@ -299,6 +314,15 @@ fn parse_cpa_accepts_object_array_and_sub2api() {
 
     let array = r#"[{"refresh_token":"r1"},{"refresh_token":"r2"}]"#;
     assert_eq!(parse_cpa_accounts(array).unwrap().len(), 2);
+
+    let object_stream = r#"
+{"refresh_token":"r1","email":"a@b.com","note":"literal } brace"}
+{"refresh_token":"r2","email":"c@d.com"}
+"#;
+    let parsed = parse_cpa_accounts(object_stream).unwrap();
+    assert_eq!(parsed.len(), 2);
+    assert_eq!(parsed[0].refresh_token, "r1");
+    assert_eq!(parsed[1].email.as_deref(), Some("c@d.com"));
 
     let sub2api = r#"{"exported_at":"x","accounts":[{"platform":"openai","type":"oauth","credentials":{"refresh_token":"r"}}],"version":1}"#;
     let parsed = parse_cpa_accounts(sub2api).unwrap();

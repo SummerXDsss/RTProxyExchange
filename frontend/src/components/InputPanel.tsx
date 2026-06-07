@@ -48,7 +48,9 @@ v1.MzEyMzQ1Njc4OTAtb2F1dGg...`;
 const BATCH_PLACEHOLDER = `批量输入，支持：
 • 多行 Token（每行一个）
 • Sub2API 导出的 JSON
-• 自定义 JSON： {"refresh_token": "..."}`;
+• 自定义 JSON： {"refresh_token": "..."}
+• 多段裸对象：{...}
+  {...}`;
 
 /// Input panel: mode switch (single login / batch), token text, advanced
 /// options and action buttons. No ClientID is requested — login uses the

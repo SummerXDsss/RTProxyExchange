@@ -68,6 +68,7 @@ pub fn is_codex_oauth_account(account: &Value) -> bool {
 /// - A JSON object (custom or single Sub2API account)
 /// - A Sub2API export (object with `accounts` array)
 /// - A JSON array of tokens or objects
+/// - Multiple bare JSON objects pasted one after another
 pub fn parse_input(text: &str) -> Result<Vec<String>> {
     let trimmed = text.trim();
     if trimmed.is_empty() {
@@ -77,6 +78,10 @@ pub fn parse_input(text: &str) -> Result<Vec<String>> {
     // Try JSON first.
     if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
         return tokens_from_json(&value);
+    }
+
+    if let Some(values) = parse_json_object_stream(trimmed)? {
+        return tokens_from_json_sequence(&values);
     }
 
     // Fall back to line-based parsing (plain or batch tokens).
@@ -143,5 +148,95 @@ fn tokens_from_json(value: &Value) -> Result<Vec<String>> {
             }
         }
         _ => Err(CoreError::NoRefreshToken),
+    }
+}
+
+fn tokens_from_json_sequence(values: &[Value]) -> Result<Vec<String>> {
+    let mut out = Vec::new();
+    for value in values {
+        if let Ok(tokens) = tokens_from_json(value) {
+            out.extend(tokens);
+        }
+    }
+
+    if out.is_empty() {
+        Err(CoreError::NoRefreshToken)
+    } else {
+        Ok(out)
+    }
+}
+
+/// Parse text made of top-level JSON objects without an enclosing array:
+/// `{...}\n{...}`. Whitespace is ignored and a comma between objects is accepted
+/// because many sellers paste objects copied out of an array.
+pub(crate) fn parse_json_object_stream(text: &str) -> Result<Option<Vec<Value>>> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+
+    let mut values = Vec::new();
+    let mut start: Option<usize> = None;
+    let mut depth = 0usize;
+    let mut in_string = false;
+    let mut escaped = false;
+
+    for (index, ch) in trimmed.char_indices() {
+        if start.is_none() {
+            if ch.is_whitespace() || (ch == ',' && !values.is_empty()) {
+                continue;
+            }
+            if ch != '{' {
+                return if values.is_empty() {
+                    Ok(None)
+                } else {
+                    Err(CoreError::JsonParse(
+                        "unexpected text between JSON objects".into(),
+                    ))
+                };
+            }
+            start = Some(index);
+            depth = 1;
+            in_string = false;
+            escaped = false;
+            continue;
+        }
+
+        if in_string {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == '"' {
+                in_string = false;
+            }
+            continue;
+        }
+
+        match ch {
+            '"' => in_string = true,
+            '{' => depth += 1,
+            '}' => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    let begin = start.take().unwrap();
+                    let end = index + ch.len_utf8();
+                    let value = serde_json::from_str::<Value>(&trimmed[begin..end])
+                        .map_err(|e| CoreError::JsonParse(e.to_string()))?;
+                    values.push(value);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if start.is_some() {
+        return Err(CoreError::JsonParse("unterminated JSON object".into()));
+    }
+
+    if values.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(values))
     }
 }

@@ -39,6 +39,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{CoreError, Result};
+use crate::input::parse_json_object_stream;
 use crate::jwt::extract_user_info;
 use crate::models::TokenResponse;
 
@@ -163,9 +164,25 @@ impl Sub2ApiExport {
 /// Parse cockpit-tools / CPA input which may be a single object or an array.
 /// Also accepts a Sub2API export (auto-detected) and unwraps it to CPA.
 pub fn parse_cpa_accounts(json: &str) -> Result<Vec<CpaAccount>> {
-    let value: serde_json::Value =
-        serde_json::from_str(json.trim()).map_err(|e| CoreError::JsonParse(e.to_string()))?;
+    let trimmed = json.trim();
+    let value: serde_json::Value = match serde_json::from_str(trimmed) {
+        Ok(value) => value,
+        Err(err) => {
+            if let Some(values) = parse_json_object_stream(trimmed)? {
+                let mut accounts = Vec::new();
+                for value in values {
+                    accounts.extend(cpa_accounts_from_value(value)?);
+                }
+                return Ok(accounts);
+            }
+            return Err(CoreError::JsonParse(err.to_string()));
+        }
+    };
 
+    cpa_accounts_from_value(value)
+}
+
+fn cpa_accounts_from_value(value: serde_json::Value) -> Result<Vec<CpaAccount>> {
     // Auto-detect a Sub2API export and convert it down to flat CPA accounts.
     if value.get("accounts").is_some()
         && (value.get("exported_at").is_some() || value.get("version").is_some())
