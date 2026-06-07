@@ -23,7 +23,12 @@ COPY crates/ ./crates/
 RUN cargo build --release -p codex-backend
 
 # ---------------------------------------------------------------------------
-# Stage 3: minimal runtime image
+# Stage 3: Docker CLI for self-update helper startup
+# ---------------------------------------------------------------------------
+FROM docker:27-cli AS docker-cli
+
+# ---------------------------------------------------------------------------
+# Stage 4: minimal runtime image
 # ---------------------------------------------------------------------------
 FROM debian:bookworm-slim AS runtime
 # reqwest needs TLS roots and libssl at runtime; curl for the healthcheck.
@@ -38,12 +43,12 @@ WORKDIR /app
 # Backend binary and built frontend assets.
 COPY --from=backend /app/target/release/codex-backend /usr/local/bin/codex-backend
 COPY --from=frontend /frontend/dist /app/frontend/dist
+COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 
 ENV PORT=8787 \
     STATIC_DIR=/app/frontend/dist \
     RUST_LOG=codex_backend=info,tower_http=info
 
-USER appuser
 EXPOSE 8787
 
 # Lightweight healthcheck against the /api/health endpoint.

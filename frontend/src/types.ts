@@ -155,6 +155,13 @@ export interface UpdateStatus {
   error: string | null;
 }
 
+/// Result from POST /api/update/apply.
+export interface ApplyUpdateResponse {
+  started: boolean;
+  message: string;
+  helper_container: string | null;
+}
+
 /// Per-file CPA upload outcome.
 export interface CpaUploadItem {
   name: string;

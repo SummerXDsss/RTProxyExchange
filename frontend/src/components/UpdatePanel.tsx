@@ -14,7 +14,7 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import NewReleasesIcon from "@mui/icons-material/NewReleases";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import { useCallback, useEffect, useState } from "react";
-import { checkUpdate } from "../api";
+import { applyUpdate, checkUpdate } from "../api";
 import type { ReleaseInfo, UpdateStatus } from "../types";
 import { Markdown } from "./Markdown";
 
@@ -66,6 +66,7 @@ function HistoryItem({ release, isCurrent }: { release: ReleaseInfo; isCurrent: 
 export function UpdatePanel({ onToast }: Props) {
   const [status, setStatus] = useState<UpdateStatus | null>(null);
   const [loading, setLoading] = useState(false);
+  const [updating, setUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(
@@ -89,6 +90,19 @@ export function UpdatePanel({ onToast }: Props) {
   useEffect(() => {
     void load(false);
   }, [load]);
+
+  const startUpdate = async () => {
+    setUpdating(true);
+    setError(null);
+    try {
+      const result = await applyUpdate();
+      onToast(result.message);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setUpdating(false);
+    }
+  };
 
   return (
     <Paper sx={{ p: 2.5 }}>
@@ -146,21 +160,32 @@ export function UpdatePanel({ onToast }: Props) {
                 severity="info"
                 icon={<NewReleasesIcon />}
                 action={
-                  status.latest_release?.html_url && (
+                  <Stack direction="row" spacing={1}>
                     <Button
                       color="inherit"
                       size="small"
-                      href={status.latest_release.html_url}
-                      target="_blank"
-                      rel="noopener"
+                      onClick={startUpdate}
+                      disabled={updating}
+                      startIcon={updating ? <CircularProgress size={14} /> : undefined}
                     >
-                      查看发布
+                      立即更新
                     </Button>
-                  )
+                    {status.latest_release?.html_url && (
+                      <Button
+                        color="inherit"
+                        size="small"
+                        href={status.latest_release.html_url}
+                        target="_blank"
+                        rel="noopener"
+                      >
+                        查看发布
+                      </Button>
+                    )}
+                  </Stack>
                 }
               >
                 发现新版本 v{status.latest_version}！当前为 v{status.current_version}。
-                更新方式见 DEPLOY.md（推 tag 触发 CI/CD 自动部署，或 docker compose pull）。
+                可直接在容器内启动更新。
               </Alert>
             ) : (
               status.latest_version && (

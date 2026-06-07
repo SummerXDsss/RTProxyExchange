@@ -109,6 +109,14 @@ pub struct OAuthExchangeResponse {
     pub email: Option<String>,
 }
 
+/// Response when a self-update helper has been started.
+#[derive(Debug, Serialize)]
+pub struct ApplyUpdateResponse {
+    pub started: bool,
+    pub message: String,
+    pub helper_container: Option<String>,
+}
+
 /// Error payload returned to clients.
 #[derive(Debug, Serialize)]
 pub struct ApiError {
@@ -400,4 +408,80 @@ pub async fn check_update(
     }
 
     Ok(Json(status))
+}
+
+/// Start a host-Docker helper container that updates this compose service.
+///
+/// This requires the app container to have `/var/run/docker.sock` mounted and
+/// Docker CLI available. The helper is separate from this container, so it can
+/// finish `docker compose up -d` even while this app container is replaced.
+pub async fn apply_update() -> Result<Json<ApplyUpdateResponse>, ApiErrorResponse> {
+    if !env_flag("CODEX_ENABLE_SELF_UPDATE") {
+        return Err(ApiErrorResponse {
+            status: StatusCode::FORBIDDEN,
+            message: "容器内更新未启用".to_string(),
+        });
+    }
+
+    let deploy_dir = std::env::var("CODEX_SELF_UPDATE_DEPLOY_DIR")
+        .unwrap_or_else(|_| "/root/codex-deploy".to_string());
+    let compose_file = std::env::var("CODEX_SELF_UPDATE_COMPOSE_FILE")
+        .unwrap_or_else(|_| "docker-compose.proxy.yml".to_string());
+    let service =
+        std::env::var("CODEX_SELF_UPDATE_SERVICE").unwrap_or_else(|_| "codex-converter".into());
+    let app_image = std::env::var("CODEX_SELF_UPDATE_IMAGE")
+        .or_else(|_| std::env::var("CODEX_IMAGE"))
+        .unwrap_or_else(|_| "ghcr.io/summerxdsss/rtproxyexchange:latest".to_string());
+    let helper_image =
+        std::env::var("CODEX_SELF_UPDATE_HELPER_IMAGE").unwrap_or_else(|_| "docker:27-cli".into());
+
+    let helper_name = format!("rtproxyexchange-updater-{}", chrono::Utc::now().timestamp());
+    let script = format!(
+        "set -eu\nexport CODEX_IMAGE={}\nexport CODEX_DEPLOY_DIR={}\ndocker compose -f {} pull {}\ndocker compose -f {} up -d {}\ndocker image prune -f\n",
+        shell_quote(&app_image),
+        shell_quote(&deploy_dir),
+        shell_quote(&compose_file),
+        shell_quote(&service),
+        shell_quote(&compose_file),
+        shell_quote(&service),
+    );
+
+    let mut cmd = tokio::process::Command::new("docker");
+    cmd.args(["run", "-d", "--rm", "--name", &helper_name])
+        .args(["-v", "/var/run/docker.sock:/var/run/docker.sock"])
+        .arg("-v")
+        .arg(format!("{deploy_dir}:{deploy_dir}"))
+        .args(["-w", &deploy_dir])
+        .arg(&helper_image)
+        .args(["sh", "-c", &script]);
+
+    let output = cmd
+        .output()
+        .await
+        .map_err(|e| ApiErrorResponse::internal(format!("启动更新失败: {e}")))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let detail = if stderr.is_empty() { stdout } else { stderr };
+        return Err(ApiErrorResponse::internal(format!(
+            "启动更新失败: {detail}"
+        )));
+    }
+
+    Ok(Json(ApplyUpdateResponse {
+        started: true,
+        message: "已开始更新，稍等 20-60 秒后刷新页面".to_string(),
+        helper_container: Some(helper_name),
+    }))
+}
+
+fn env_flag(name: &str) -> bool {
+    std::env::var(name)
+        .map(|v| matches!(v.as_str(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(false)
+}
+
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
 }

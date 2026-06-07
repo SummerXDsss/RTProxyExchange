@@ -48,6 +48,7 @@ async fn main() {
         .route("/api/convert/stream", post(api::convert_stream))
         .route("/api/transform", post(api::transform))
         .route("/api/update", get(api::check_update))
+        .route("/api/update/apply", post(api::apply_update))
         .route("/api/split", post(split::split))
         .route("/api/split/zip", post(split::split_zip))
         .route("/api/cpa/test", post(cpa::test_connection))

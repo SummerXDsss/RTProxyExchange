@@ -11,13 +11,22 @@ services:
     image: ${CODEX_IMAGE:-codex-converter:latest}
     container_name: codex-converter
     restart: unless-stopped
+    user: "0:0"
     expose:
       - "8787"          # internal only, not published to the host
     environment:
       PORT: "8787"
       CODEX_CONVERTER_TIMEOUT: "15"
       CODEX_CONVERTER_CONCURRENCY: "4"
+      CODEX_ENABLE_SELF_UPDATE: "true"
+      CODEX_SELF_UPDATE_IMAGE: "ghcr.io/summerxdsss/rtproxyexchange:latest"
+      CODEX_SELF_UPDATE_DEPLOY_DIR: "/root/codex-deploy"
+      CODEX_SELF_UPDATE_COMPOSE_FILE: "docker-compose.proxy.yml"
+      CODEX_SELF_UPDATE_SERVICE: "codex-converter"
       RUST_LOG: "codex_backend=info,tower_http=info"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /root/codex-deploy:/root/codex-deploy
     networks:
       - codexnet
 

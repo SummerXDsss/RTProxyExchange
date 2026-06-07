@@ -1,5 +1,6 @@
 import type {
   BackendConfig,
+  ApplyUpdateResponse,
   ConvertRequest,
   ConvertResponse,
   CpaUploadResponse,
@@ -104,6 +105,13 @@ export async function downloadSplitZip(
 /// Check for updates against the project's GitHub releases/tags.
 export async function checkUpdate(refresh = false): Promise<UpdateStatus> {
   const resp = await fetch(`/api/update${refresh ? "?refresh=1" : ""}`);
+  if (!resp.ok) throw new Error(await errorMessage(resp));
+  return resp.json();
+}
+
+/// Ask the backend container to start the self-update helper.
+export async function applyUpdate(): Promise<ApplyUpdateResponse> {
+  const resp = await fetch("/api/update/apply", { method: "POST" });
   if (!resp.ok) throw new Error(await errorMessage(resp));
   return resp.json();
 }
