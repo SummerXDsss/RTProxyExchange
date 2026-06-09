@@ -22,7 +22,7 @@ pub const DEFAULT_CONNECT_TIMEOUT_SECS: u64 = 6;
 /// Default max retry attempts for retryable errors.
 pub const DEFAULT_MAX_RETRIES: u32 = 2;
 /// Default number of tokens processed concurrently.
-pub const DEFAULT_CONCURRENCY: usize = 4;
+pub const DEFAULT_CONCURRENCY: usize = 32;
 
 /// Runtime configuration for token refresh requests.
 #[derive(Debug, Clone)]

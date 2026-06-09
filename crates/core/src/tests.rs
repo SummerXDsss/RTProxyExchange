@@ -355,6 +355,28 @@ fn split_accounts_names_and_dual_format() {
 }
 
 #[test]
+fn split_accounts_handles_10240_bare_objects() {
+    use crate::transform::split_accounts;
+
+    let input = (0..10240)
+        .map(|i| {
+            format!(
+                r#"{{"refresh_token":"rt_{i}","email":"user{i}@example.com","account_id":"acc_{i}"}}"#
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let result = split_accounts(&input).unwrap();
+    assert_eq!(result.total, 10240);
+    assert_eq!(result.accounts[0].cpa.refresh_token, "rt_0");
+    assert_eq!(
+        result.accounts[10239].email.as_deref(),
+        Some("user10239@example.com")
+    );
+}
+
+#[test]
 fn filename_base_fallbacks() {
     use crate::transform::filename_base;
     assert_eq!(filename_base(Some("a@b.com"), None, 0), "codex_a@b.com");

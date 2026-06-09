@@ -6,10 +6,14 @@
 //! (`/v0/management/...`). The management key is used transiently and never
 //! logged or persisted.
 
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use axum::{http::StatusCode, response::IntoResponse, Json};
+use futures::stream::{self, StreamExt};
 use serde::{Deserialize, Serialize};
+
+const DEFAULT_UPLOAD_CONCURRENCY: usize = 32;
+const MAX_UPLOAD_CONCURRENCY: usize = 128;
 
 /// A single CPA auth file to upload (filename + the account JSON object).
 #[derive(Debug, Deserialize)]
@@ -155,23 +159,39 @@ pub async fn upload(Json(req): Json<CpaUploadRequest>) -> axum::response::Respon
         Err(e) => return err_json(StatusCode::INTERNAL_SERVER_ERROR, e),
     };
 
-    let mut results = Vec::with_capacity(req.files.len());
-    for file in &req.files {
-        let name = sanitize_name(&file.name);
-        let outcome = upload_one(&client, &base, &req.management_key, &name, &file.content).await;
-        results.push(match outcome {
-            Ok(()) => CpaUploadItem {
-                name,
-                ok: true,
-                error: None,
-            },
-            Err(e) => CpaUploadItem {
-                name,
-                ok: false,
-                error: Some(e),
-            },
-        });
-    }
+    let concurrency = upload_concurrency();
+    let base = Arc::new(base);
+    let key = Arc::new(req.management_key);
+    let mut indexed: Vec<(usize, CpaUploadItem)> = stream::iter(req.files.into_iter().enumerate())
+        .map(|(index, file)| {
+            let client = client.clone();
+            let base = Arc::clone(&base);
+            let key = Arc::clone(&key);
+            async move {
+                let name = sanitize_name(&file.name);
+                let outcome =
+                    upload_one(&client, base.as_str(), key.as_str(), &name, &file.content).await;
+                let item = match outcome {
+                    Ok(()) => CpaUploadItem {
+                        name,
+                        ok: true,
+                        error: None,
+                    },
+                    Err(e) => CpaUploadItem {
+                        name,
+                        ok: false,
+                        error: Some(e),
+                    },
+                };
+                (index, item)
+            }
+        })
+        .buffer_unordered(concurrency)
+        .collect()
+        .await;
+
+    indexed.sort_by_key(|(index, _)| *index);
+    let results: Vec<CpaUploadItem> = indexed.into_iter().map(|(_, item)| item).collect();
 
     let success = results.iter().filter(|r| r.ok).count();
     let failed = results.len() - success;
@@ -185,6 +205,14 @@ pub async fn upload(Json(req): Json<CpaUploadRequest>) -> axum::response::Respon
         }),
     )
         .into_response()
+}
+
+fn upload_concurrency() -> usize {
+    std::env::var("CODEX_CPA_UPLOAD_CONCURRENCY")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(DEFAULT_UPLOAD_CONCURRENCY)
+        .clamp(1, MAX_UPLOAD_CONCURRENCY)
 }
 
 /// Ensure the upload filename is a safe `.json` basename.

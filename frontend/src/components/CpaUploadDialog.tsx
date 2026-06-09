@@ -39,6 +39,7 @@ interface Props {
 
 const LS_BASE = "rtpx:cpa:base_url";
 const LS_KEY = "rtpx:cpa:mgmt_key";
+const RESULT_DISPLAY_LIMIT = 200;
 
 /// Dialog to push CPA account files directly into a CLIProxyAPI instance via
 /// its Management API (proxied through our backend to avoid CORS/mixed-content).
@@ -105,19 +106,20 @@ export function CpaUploadDialog({ open, onClose, files, onToast }: Props) {
   };
 
   const canSubmit = baseUrl.trim() !== "" && mgmtKey !== "" && files.length > 0;
+  const visibleResults = result?.results.slice(0, RESULT_DISPLAY_LIMIT) ?? [];
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>
         <Stack direction="row" spacing={1} alignItems="center">
           <CloudUploadIcon color="primary" />
-          <span>添加到 CLIProxyAPI</span>
+          <span>批量导入 CPA</span>
         </Stack>
       </DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 0.5 }}>
           <Alert severity="info" variant="outlined" sx={{ py: 0.5 }}>
-            通过 CLIProxyAPI 管理接口直接添加 {files.length} 个账号。
+            通过 CLIProxyAPI 管理接口批量导入 {files.length} 个 CPA 账号。
             需在 CLIProxyAPI 配置中开启远程管理并设置管理密钥。
           </Alert>
 
@@ -167,8 +169,13 @@ export function CpaUploadDialog({ open, onClose, files, onToast }: Props) {
                 <Chip size="small" color="success" label={`成功 ${result.success}`} />
                 {result.failed > 0 && <Chip size="small" color="error" label={`失败 ${result.failed}`} />}
               </Stack>
+              {result.results.length > RESULT_DISPLAY_LIMIT && (
+                <Typography variant="caption" color="text.secondary">
+                  仅显示前 {RESULT_DISPLAY_LIMIT} 条结果。
+                </Typography>
+              )}
               <List dense sx={{ maxHeight: 200, overflow: "auto" }}>
-                {result.results.map((r) => (
+                {visibleResults.map((r) => (
                   <ListItem key={r.name}>
                     <ListItemIcon sx={{ minWidth: 32 }}>
                       {r.ok ? (
@@ -204,7 +211,7 @@ export function CpaUploadDialog({ open, onClose, files, onToast }: Props) {
           disabled={uploading || !canSubmit}
           startIcon={uploading ? <CircularProgress size={16} /> : <CloudUploadIcon />}
         >
-          添加 {files.length} 个账号
+          导入 {files.length} 个账号
         </Button>
       </DialogActions>
     </Dialog>

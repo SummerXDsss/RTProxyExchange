@@ -36,6 +36,12 @@ export function ProgressPanel({ total, completed, rows }: Props) {
         <LinearProgress variant="determinate" value={pct} />
       </Box>
 
+      {rows.length >= 200 && (
+        <Typography variant="caption" color="text.secondary">
+          仅显示最近 200 条结果，完整结果会在完成后输出。
+        </Typography>
+      )}
+
       <List dense sx={{ maxHeight: 360, overflow: "auto" }}>
         {rows.map((row) => (
           <ListItem key={row.index} divider>

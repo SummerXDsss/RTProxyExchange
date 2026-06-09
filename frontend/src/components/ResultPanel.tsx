@@ -8,6 +8,7 @@ import {
   List,
   ListItem,
   ListItemText,
+  Pagination,
   Stack,
   Typography,
 } from "@mui/material";
@@ -19,6 +20,10 @@ import { isDryRun } from "../types";
 import type { OutputFormat } from "../formats";
 import { AccountCard } from "./AccountCard";
 import { FormatMenuButton } from "./FormatMenuButton";
+import { useEffect, useState } from "react";
+
+const PAGE_SIZE = 100;
+const DRY_RUN_PREVIEW_LIMIT = 200;
 
 interface Props {
   result: ConvertResponse | null;
@@ -43,14 +48,21 @@ function StatChips({ result }: { result: BatchResult }) {
 }
 
 function DryRunView({ result }: { result: DryRunResult }) {
+  const previews = result.token_previews.slice(0, DRY_RUN_PREVIEW_LIMIT);
+
   return (
     <Stack spacing={2}>
       <Alert severity="info">
         <AlertTitle>仅解析模式</AlertTitle>
         共识别到 {result.total} 个 Token，未执行刷新。
       </Alert>
+      {result.token_previews.length > DRY_RUN_PREVIEW_LIMIT && (
+        <Typography variant="caption" color="text.secondary">
+          仅显示前 {DRY_RUN_PREVIEW_LIMIT} 条预览。
+        </Typography>
+      )}
       <List dense>
-        {result.token_previews.map((preview, i) => (
+        {previews.map((preview, i) => (
           <ListItem key={i} divider>
             <ListItemText
               primary={preview}
@@ -73,6 +85,18 @@ function BatchView({
   onPushAccount,
   onToast,
 }: Props & { result: BatchResult }) {
+  const [page, setPage] = useState(1);
+  const pageCount = Math.max(1, Math.ceil(result.accounts.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const visibleAccounts = result.accounts.slice(
+    (safePage - 1) * PAGE_SIZE,
+    safePage * PAGE_SIZE,
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [result]);
+
   return (
     <Stack spacing={2}>
       <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" useFlexGap>
@@ -97,7 +121,7 @@ function BatchView({
             onClick={onPushAll}
             disabled={result.accounts.length === 0}
           >
-            添加到 CLIProxyAPI
+            批量导入 CPA
           </Button>
         </Stack>
       </Stack>
@@ -120,8 +144,27 @@ function BatchView({
               账号 ({result.accounts.length})
             </Typography>
           </Divider>
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+            sx={{ mb: 1 }}
+          >
+            <Typography variant="caption" color="text.secondary">
+              显示 {(safePage - 1) * PAGE_SIZE + 1}-
+              {Math.min(safePage * PAGE_SIZE, result.accounts.length)} / {result.accounts.length}
+            </Typography>
+            {pageCount > 1 && (
+              <Pagination
+                count={pageCount}
+                page={safePage}
+                size="small"
+                onChange={(_, value) => setPage(value)}
+              />
+            )}
+          </Stack>
           <Stack spacing={1}>
-            {result.accounts.map((acc) => (
+            {visibleAccounts.map((acc) => (
               <AccountCard
                 key={acc.id}
                 account={acc}

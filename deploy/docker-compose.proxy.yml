@@ -17,7 +17,8 @@ services:
     environment:
       PORT: "8787"
       CODEX_CONVERTER_TIMEOUT: "15"
-      CODEX_CONVERTER_CONCURRENCY: "4"
+      CODEX_CONVERTER_CONCURRENCY: "32"
+      CODEX_CPA_UPLOAD_CONCURRENCY: "32"
       CODEX_ENABLE_SELF_UPDATE: "true"
       CODEX_SELF_UPDATE_IMAGE: "ghcr.io/summerxdsss/rtproxyexchange:latest"
       CODEX_SELF_UPDATE_DEPLOY_DIR: "/root/codex-deploy"

@@ -7,6 +7,7 @@ mod split;
 use std::{net::SocketAddr, sync::Arc};
 
 use axum::{
+    extract::DefaultBodyLimit,
     routing::{get, post},
     Router,
 };
@@ -16,6 +17,8 @@ use tower_http::services::ServeDir;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use api::AppState;
+
+const MAX_REQUEST_BODY_BYTES: usize = 128 * 1024 * 1024;
 
 #[tokio::main]
 async fn main() {
@@ -54,6 +57,7 @@ async fn main() {
         .route("/api/cpa/test", post(cpa::test_connection))
         .route("/api/cpa/upload", post(cpa::upload))
         .with_state(state)
+        .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_BYTES))
         .layer(cors);
 
     // Serve the built frontend (if present) as static files.

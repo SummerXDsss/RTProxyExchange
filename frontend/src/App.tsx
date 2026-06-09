@@ -53,7 +53,7 @@ export function App() {
   const [inputMode, setInputMode] = useState<Mode>("single");
   const [input, setInput] = useState("");
   const [timeout, setTimeout] = useState("");
-  const [concurrency, setConcurrency] = useState("4");
+  const [concurrency, setConcurrency] = useState("32");
   const [oauthSessionId, setOauthSessionId] = useState("");
   const [oauthAuthUrl, setOauthAuthUrl] = useState("");
   const [oauthRedirectUri, setOauthRedirectUri] = useState("");
@@ -120,16 +120,18 @@ export function App() {
             setProgressTotal(event.total);
           } else if (event.type === "item") {
             setProgressDone(event.completed);
-            setProgressRows((prev) => [
-              ...prev,
-              {
-                index: event.index,
-                token_preview: event.token_preview,
-                ok: event.ok,
-                email: event.email,
-                error: event.error,
-              },
-            ]);
+            setProgressRows((prev) =>
+              [
+                ...prev,
+                {
+                  index: event.index,
+                  token_preview: event.token_preview,
+                  ok: event.ok,
+                  email: event.email,
+                  error: event.error,
+                },
+              ].slice(-200),
+            );
           } else if (event.type === "done") {
             setResult(event.result);
             history.add(event.result);

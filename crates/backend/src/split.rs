@@ -88,10 +88,18 @@ fn email_slug(account: &codex_core::transform::SplitAccount) -> String {
 
 /// Parse input and return per-account split metadata + both-format payloads.
 pub async fn split(Json(req): Json<SplitRequest>) -> Response {
-    match split_accounts(&req.input) {
-        Ok(result) => Json(result).into_response(),
-        Err(e) => bad_request(e.to_string()),
+    let result = tokio::task::spawn_blocking(move || split_accounts(&req.input)).await;
+    match result {
+        Ok(Ok(result)) => Json(result).into_response(),
+        Ok(Err(e)) => bad_request(e.to_string()),
+        Err(e) => bad_request(format!("split task failed: {e}")),
     }
+}
+
+/// Parse input and build zip off the async runtime worker.
+fn split_and_zip(input: String, formats: Vec<SplitFormat>) -> Result<Vec<u8>, String> {
+    let result = split_accounts(&input).map_err(|e| e.to_string())?;
+    build_zip(&result, &formats).map_err(|e| format!("failed to build zip: {e}"))
 }
 
 /// Serialize a [`SplitResult`] into a zip archive of per-account JSON files.
@@ -143,13 +151,9 @@ fn build_zip(result: &SplitResult, formats: &[SplitFormat]) -> std::io::Result<V
 
 /// Split accounts and stream back a zip archive for batch download.
 pub async fn split_zip(Json(req): Json<SplitZipRequest>) -> Response {
-    let result = match split_accounts(&req.input) {
-        Ok(r) => r,
-        Err(e) => return bad_request(e.to_string()),
-    };
-
-    match build_zip(&result, &req.formats) {
-        Ok(bytes) => (
+    let result = tokio::task::spawn_blocking(move || split_and_zip(req.input, req.formats)).await;
+    match result {
+        Ok(Ok(bytes)) => (
             StatusCode::OK,
             [
                 (header::CONTENT_TYPE, "application/zip".to_string()),
@@ -161,6 +165,7 @@ pub async fn split_zip(Json(req): Json<SplitZipRequest>) -> Response {
             Body::from(bytes),
         )
             .into_response(),
-        Err(e) => bad_request(format!("failed to build zip: {e}")),
+        Ok(Err(e)) => bad_request(e),
+        Err(e) => bad_request(format!("zip task failed: {e}")),
     }
 }

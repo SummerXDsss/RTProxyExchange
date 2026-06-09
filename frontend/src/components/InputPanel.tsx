@@ -3,7 +3,6 @@ import {
   AccordionDetails,
   AccordionSummary,
   Alert,
-  Box,
   Button,
   Stack,
   TextField,
@@ -17,8 +16,10 @@ import LoginIcon from "@mui/icons-material/Login";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import PlaylistAddCheckIcon from "@mui/icons-material/PlaylistAddCheck";
 import SearchIcon from "@mui/icons-material/Search";
+import UnfoldLessIcon from "@mui/icons-material/UnfoldLess";
+import UnfoldMoreIcon from "@mui/icons-material/UnfoldMore";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 export type Mode = "single" | "batch";
 
@@ -57,6 +58,7 @@ const BATCH_PLACEHOLDER = `批量输入，支持：
 /// refresh token alone.
 export function InputPanel(props: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const [expandedInput, setExpandedInput] = useState(false);
   const single = props.mode === "single";
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -133,19 +135,8 @@ export function InputPanel(props: Props) {
         </Stack>
       )}
 
-      <TextField
-        label={single ? "Refresh Token" : "批量输入"}
-        multiline
-        minRows={single ? 4 : 12}
-        value={props.input}
-        onChange={(e) => props.onInputChange(e.target.value)}
-        placeholder={single ? SINGLE_PLACEHOLDER : BATCH_PLACEHOLDER}
-        fullWidth
-        slotProps={{ htmlInput: { style: { fontFamily: "monospace", fontSize: 13 } } }}
-      />
-
       {!single && (
-        <Box>
+        <Stack direction="row" spacing={1} alignItems="center">
           <input ref={fileRef} type="file" accept=".txt,.json" hidden onChange={handleFile} />
           <Button
             variant="outlined"
@@ -155,8 +146,28 @@ export function InputPanel(props: Props) {
           >
             从文件导入
           </Button>
-        </Box>
+          <Button
+            variant="outlined"
+            startIcon={expandedInput ? <UnfoldLessIcon /> : <UnfoldMoreIcon />}
+            onClick={() => setExpandedInput((v) => !v)}
+            size="small"
+          >
+            {expandedInput ? "收起输入框" : "展开输入框"}
+          </Button>
+        </Stack>
       )}
+
+      <TextField
+        label={single ? "Refresh Token" : "批量输入"}
+        multiline
+        minRows={single ? 4 : expandedInput ? 28 : 12}
+        maxRows={single ? 8 : expandedInput ? 42 : 16}
+        value={props.input}
+        onChange={(e) => props.onInputChange(e.target.value)}
+        placeholder={single ? SINGLE_PLACEHOLDER : BATCH_PLACEHOLDER}
+        fullWidth
+        slotProps={{ htmlInput: { style: { fontFamily: "monospace", fontSize: 13 } } }}
+      />
 
       <Accordion disableGutters>
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>

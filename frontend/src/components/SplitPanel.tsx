@@ -7,6 +7,7 @@ import {
   List,
   ListItem,
   ListItemText,
+  Pagination,
   Paper,
   Stack,
   TextField,
@@ -19,11 +20,13 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DownloadIcon from "@mui/icons-material/Download";
 import FolderZipIcon from "@mui/icons-material/FolderZip";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { downloadSplitZip, splitAccounts } from "../api";
 import { dateStamp } from "../formats";
 import type { SplitAccount, SplitFormat, SplitResult } from "../types";
 import { CpaUploadDialog, type UploadFile } from "./CpaUploadDialog";
+
+const PAGE_SIZE = 100;
 
 interface Props {
   onToast: (message: string) => void;
@@ -148,7 +151,12 @@ export function SplitPanel({ onToast, title, description, sample }: Props) {
   const [busy, setBusy] = useState(false);
   const [cpaOpen, setCpaOpen] = useState(false);
   const [cpaFiles, setCpaFiles] = useState<UploadFile[]>([]);
+  const [page, setPage] = useState(1);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setPage(1);
+  }, [result]);
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -218,6 +226,11 @@ export function SplitPanel({ onToast, title, description, sample }: Props) {
       setBusy(false);
     }
   };
+
+  const pageCount = result ? Math.max(1, Math.ceil(result.accounts.length / PAGE_SIZE)) : 1;
+  const safePage = Math.min(page, pageCount);
+  const visibleAccounts =
+    result?.accounts.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE) ?? [];
 
   return (
     <Paper sx={{ p: 2.5 }}>
@@ -332,10 +345,30 @@ export function SplitPanel({ onToast, title, description, sample }: Props) {
               </Button>
             </Stack>
 
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+              sx={{ mb: 1 }}
+            >
+              <Typography variant="caption" color="text.secondary">
+                显示 {(safePage - 1) * PAGE_SIZE + 1}-
+                {Math.min(safePage * PAGE_SIZE, result.total)} / {result.total}
+              </Typography>
+              {pageCount > 1 && (
+                <Pagination
+                  count={pageCount}
+                  page={safePage}
+                  size="small"
+                  onChange={(_, value) => setPage(value)}
+                />
+              )}
+            </Stack>
+
             <List dense sx={{ maxHeight: 360, overflow: "auto" }}>
-              {result.accounts.map((account, i) => (
+              {visibleAccounts.map((account, i) => (
                 <AccountRow
-                  key={i}
+                  key={(safePage - 1) * PAGE_SIZE + i}
                   account={account}
                   onDownload={downloadOne}
                   onCopy={copyOne}
