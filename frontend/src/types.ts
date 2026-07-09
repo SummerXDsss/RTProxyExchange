@@ -177,6 +177,37 @@ export interface CpaUploadResponse {
   results: CpaUploadItem[];
 }
 
+/// Per-account Sub2API import outcome.
+export interface Sub2ApiImportItem {
+  name: string;
+  ok: boolean;
+  email: string | null;
+  expires_at: string | null;
+  error: string | null;
+}
+
+/// Aggregated Sub2API import response.
+export interface Sub2ApiImportResponse {
+  total: number;
+  success: number;
+  failed: number;
+  results: Sub2ApiImportItem[];
+}
+
+export interface Sub2ApiLoginResponse {
+  access_token: string;
+  token_type: string | null;
+  email: string | null;
+  role: string | null;
+}
+
+export interface Sub2ApiGroup {
+  id: number;
+  name: string;
+  platform: string | null;
+  status: string | null;
+}
+
 /// A saved run in local history.
 export interface HistoryEntry {
   id: string;

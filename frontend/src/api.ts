@@ -9,6 +9,9 @@ import type {
   ProgressEvent,
   SplitFormat,
   SplitResult,
+  Sub2ApiGroup,
+  Sub2ApiImportResponse,
+  Sub2ApiLoginResponse,
   TransformRequest,
   UpdateStatus,
 } from "./types";
@@ -140,6 +143,98 @@ export async function cpaUpload(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ base_url: baseUrl, management_key: managementKey, files }),
+  });
+  if (!resp.ok) throw new Error(await errorMessage(resp));
+  return resp.json();
+}
+
+/// Test connectivity + admin auth against a Sub2API instance.
+export async function sub2apiTest(
+  baseUrl: string,
+  adminKey: string,
+): Promise<{ ok: boolean }> {
+  const resp = await fetch("/api/sub2api/test", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ base_url: baseUrl, admin_key: adminKey }),
+  });
+  if (!resp.ok) throw new Error(await errorMessage(resp));
+  return resp.json();
+}
+
+/// Login to Sub2API with an admin account and return a JWT.
+export async function sub2apiLogin(
+  baseUrl: string,
+  email: string,
+  password: string,
+): Promise<Sub2ApiLoginResponse> {
+  const resp = await fetch("/api/sub2api/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ base_url: baseUrl, email, password }),
+  });
+  if (!resp.ok) throw new Error(await errorMessage(resp));
+  return resp.json();
+}
+
+/// List OpenAI groups from Sub2API using Admin API Key or admin JWT.
+export async function sub2apiGroups(
+  baseUrl: string,
+  adminKey: string,
+): Promise<Sub2ApiGroup[]> {
+  const resp = await fetch("/api/sub2api/groups", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ base_url: baseUrl, admin_key: adminKey }),
+  });
+  if (!resp.ok) throw new Error(await errorMessage(resp));
+  const body = await resp.json();
+  return body.groups ?? [];
+}
+
+/// Extract access_token values from AT-only JSON and create Sub2API OpenAI OAuth accounts.
+export async function sub2apiImportAt(
+  baseUrl: string,
+  adminKey: string,
+  input: string,
+  groupIds: number[] = [],
+): Promise<Sub2ApiImportResponse> {
+  const resp = await fetch("/api/sub2api/import-at", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ base_url: baseUrl, admin_key: adminKey, input, group_ids: groupIds }),
+  });
+  if (!resp.ok) throw new Error(await errorMessage(resp));
+  return resp.json();
+}
+
+/// Extract api_key values and create Sub2API OpenAI API Key accounts.
+export async function sub2apiImportApiKeys(
+  baseUrl: string,
+  adminKey: string,
+  input: string,
+  groupIds: number[] = [],
+): Promise<Sub2ApiImportResponse> {
+  const resp = await fetch("/api/sub2api/import-api-keys", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ base_url: baseUrl, admin_key: adminKey, input, group_ids: groupIds }),
+  });
+  if (!resp.ok) throw new Error(await errorMessage(resp));
+  return resp.json();
+}
+
+/// Refresh RTs and upload the refreshed OpenAI OAuth accounts to Sub2API.
+export async function sub2apiImportRefreshTokens(
+  baseUrl: string,
+  adminKey: string,
+  input: string,
+  groupIds: number[] = [],
+): Promise<Sub2ApiImportResponse> {
+  const resp = await fetch("/api/sub2api/import-refresh-tokens", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ base_url: baseUrl, admin_key: adminKey, input, group_ids: groupIds }),
   });
   if (!resp.ok) throw new Error(await errorMessage(resp));
   return resp.json();

@@ -3,6 +3,7 @@
 mod api;
 mod cpa;
 mod split;
+mod sub2api;
 
 use std::{net::SocketAddr, sync::Arc};
 
@@ -56,6 +57,21 @@ async fn main() {
         .route("/api/split/zip", post(split::split_zip))
         .route("/api/cpa/test", post(cpa::test_connection))
         .route("/api/cpa/upload", post(cpa::upload))
+        .route("/api/sub2api/login", post(sub2api::login))
+        .route("/api/sub2api/groups", post(sub2api::list_groups))
+        .route("/api/sub2api/test", post(sub2api::test_connection))
+        .route(
+            "/api/sub2api/import-at",
+            post(sub2api::import_access_tokens),
+        )
+        .route(
+            "/api/sub2api/import-api-keys",
+            post(sub2api::import_api_keys),
+        )
+        .route(
+            "/api/sub2api/import-refresh-tokens",
+            post(sub2api::import_refresh_tokens),
+        )
         .with_state(state)
         .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_BYTES))
         .layer(cors);

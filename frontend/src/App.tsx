@@ -28,6 +28,7 @@ import { HistoryDrawer } from "./components/HistoryDrawer";
 import { ProgressPanel } from "./components/ProgressPanel";
 import { ResultPanel } from "./components/ResultPanel";
 import { SplitPanel, FREE_SAMPLE } from "./components/SplitPanel";
+import { Sub2ApiAtImportPanel } from "./components/Sub2ApiAtImportPanel";
 import { TransformPanel } from "./components/TransformPanel";
 import { UpdatePanel } from "./components/UpdatePanel";
 import { CpaUploadDialog, type UploadFile } from "./components/CpaUploadDialog";
@@ -316,6 +317,7 @@ export function App() {
             <Tab label="格式转换" />
             <Tab label="账号拆分" />
             <Tab label="Free 号转换" />
+            <Tab label="Sub2API 导入" />
             <Tab label="检查更新" />
           </Tabs>
 
@@ -389,6 +391,10 @@ export function App() {
               }
               sample={FREE_SAMPLE}
             />
+          ) : tab === 4 ? (
+            <Paper sx={{ p: 2.5 }}>
+              <Sub2ApiAtImportPanel onToast={setToast} />
+            </Paper>
           ) : (
             <UpdatePanel onToast={setToast} />
           )}
