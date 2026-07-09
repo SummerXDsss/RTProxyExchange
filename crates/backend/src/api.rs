@@ -1,10 +1,17 @@
 //! HTTP API handlers for the Codex Token converter backend.
 
-use std::{collections::HashMap, convert::Infallible, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    convert::Infallible,
+    io::{Cursor, Write},
+    sync::Arc,
+    time::Duration,
+};
 
 use axum::{
+    body::Body,
     extract::State,
-    http::StatusCode,
+    http::{header, StatusCode},
     response::{
         sse::{Event, KeepAlive, Sse},
         IntoResponse, Response,
@@ -18,6 +25,7 @@ use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
+use zip::{write::SimpleFileOptions, ZipWriter};
 
 const OAUTH_SESSION_TTL: Duration = Duration::from_secs(600);
 
@@ -344,6 +352,22 @@ pub struct TransformRequest {
     pub direction: TransformDirection,
 }
 
+/// One file in a batch offline transform.
+#[derive(Debug, Deserialize)]
+pub struct TransformZipFile {
+    pub name: Option<String>,
+    pub input: String,
+}
+
+/// Request body for batch transform zip download.
+#[derive(Debug, Deserialize)]
+pub struct TransformZipRequest {
+    /// Which way to convert.
+    pub direction: TransformDirection,
+    /// Source files to convert.
+    pub files: Vec<TransformZipFile>,
+}
+
 /// Offline format conversion between CPA and Sub2API. No network / refresh.
 ///
 /// Returns the converted document directly (a CPA `BatchResult` or a Sub2API
@@ -351,19 +375,145 @@ pub struct TransformRequest {
 pub async fn transform(
     Json(req): Json<TransformRequest>,
 ) -> Result<Json<serde_json::Value>, ApiErrorResponse> {
-    let value = match req.direction {
+    let value = transform_value(&req.input, req.direction)
+        .map_err(|e| ApiErrorResponse::bad_request(e.to_string()))?;
+    Ok(Json(value))
+}
+
+fn transform_value(
+    input: &str,
+    direction: TransformDirection,
+) -> Result<serde_json::Value, String> {
+    match direction {
         TransformDirection::Sub2apiToCpa => {
-            let result = codex_core::transform::sub2api_json_to_cpa(&req.input)
-                .map_err(|e| ApiErrorResponse::bad_request(e.to_string()))?;
-            serde_json::to_value(result).map_err(|e| ApiErrorResponse::internal(e.to_string()))?
+            let result =
+                codex_core::transform::sub2api_json_to_cpa(input).map_err(|e| e.to_string())?;
+            serde_json::to_value(result).map_err(|e| e.to_string())
         }
         TransformDirection::CpaToSub2api => {
-            let export = codex_core::transform::cpa_json_to_sub2api(&req.input)
-                .map_err(|e| ApiErrorResponse::bad_request(e.to_string()))?;
-            serde_json::to_value(export).map_err(|e| ApiErrorResponse::internal(e.to_string()))?
+            let export =
+                codex_core::transform::cpa_json_to_sub2api(input).map_err(|e| e.to_string())?;
+            serde_json::to_value(export).map_err(|e| e.to_string())
         }
-    };
-    Ok(Json(value))
+    }
+}
+
+fn transform_output_suffix(direction: TransformDirection) -> &'static str {
+    match direction {
+        TransformDirection::Sub2apiToCpa => "cpa",
+        TransformDirection::CpaToSub2api => "sub2api",
+    }
+}
+
+fn safe_file_stem(name: Option<&str>, index: usize) -> String {
+    let raw = name
+        .and_then(|s| s.rsplit(['/', '\\']).next())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or("account");
+    let stem = raw
+        .strip_suffix(".json")
+        .or_else(|| raw.strip_suffix(".txt"))
+        .unwrap_or(raw);
+    let safe: String = stem
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | '@') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+
+    if safe.is_empty() {
+        format!("account_{}", index + 1)
+    } else {
+        safe
+    }
+}
+
+fn transform_zip_bytes(req: TransformZipRequest) -> Result<Vec<u8>, String> {
+    if req.files.is_empty() {
+        return Err("没有可转换的文件".into());
+    }
+
+    let mut buf = Cursor::new(Vec::new());
+    let mut errors = Vec::new();
+    {
+        let mut zip = ZipWriter::new(&mut buf);
+        let options = SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated)
+            .unix_permissions(0o600);
+        let suffix = transform_output_suffix(req.direction);
+        let mut success = 0usize;
+
+        for (index, file) in req.files.iter().enumerate() {
+            if file.input.trim().is_empty() {
+                errors.push(serde_json::json!({
+                    "index": index,
+                    "name": file.name,
+                    "error": "文件内容为空"
+                }));
+                continue;
+            }
+
+            match transform_value(&file.input, req.direction) {
+                Ok(value) => {
+                    let name = format!(
+                        "{}-{}.json",
+                        safe_file_stem(file.name.as_deref(), index),
+                        suffix
+                    );
+                    let text = serde_json::to_string_pretty(&value).map_err(|e| e.to_string())?;
+                    zip.start_file(name, options).map_err(|e| e.to_string())?;
+                    zip.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
+                    success += 1;
+                }
+                Err(error) => errors.push(serde_json::json!({
+                    "index": index,
+                    "name": file.name,
+                    "error": error
+                })),
+            }
+        }
+
+        if !errors.is_empty() {
+            let text = serde_json::to_string_pretty(&serde_json::json!({
+                "success": success,
+                "failed": errors.len(),
+                "errors": errors
+            }))
+            .map_err(|e| e.to_string())?;
+            zip.start_file("_errors.json", options)
+                .map_err(|e| e.to_string())?;
+            zip.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
+        }
+
+        zip.finish().map_err(|e| e.to_string())?;
+    }
+    Ok(buf.into_inner())
+}
+
+/// Batch offline transform and return a zip containing converted JSON files.
+pub async fn transform_zip(Json(req): Json<TransformZipRequest>) -> Response {
+    let result = tokio::task::spawn_blocking(move || transform_zip_bytes(req)).await;
+    match result {
+        Ok(Ok(bytes)) => (
+            StatusCode::OK,
+            [
+                (header::CONTENT_TYPE, "application/zip".to_string()),
+                (
+                    header::CONTENT_DISPOSITION,
+                    "attachment; filename=\"format-transform.zip\"".to_string(),
+                ),
+            ],
+            Body::from(bytes),
+        )
+            .into_response(),
+        Ok(Err(e)) => ApiErrorResponse::bad_request(e).into_response(),
+        Err(e) => ApiErrorResponse::internal(format!("zip task failed: {e}")).into_response(),
+    }
 }
 
 // Bring StreamExt into scope for `.map` on the receiver stream.

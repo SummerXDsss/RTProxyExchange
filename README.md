@@ -153,6 +153,7 @@ event: done      data: {"type":"done","result":{ ...BatchResult... }}
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
 | `PORT` | 后端端口 | 8787 |
+| `BIND_ADDR` | 后端监听地址；公网/Docker 默认开放到所有网卡，本地只想自用可设为 `127.0.0.1` | 0.0.0.0 |
 | `STATIC_DIR` | 前端静态资源目录 | frontend/dist |
 | `CODEX_CONVERTER_TIMEOUT` | 请求超时（秒） | 25 |
 | `CODEX_CONVERTER_CONCURRENCY` | 并发数 | 4 |

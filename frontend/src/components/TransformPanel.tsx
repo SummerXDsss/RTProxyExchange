@@ -2,6 +2,7 @@ import {
   Alert,
   Box,
   Button,
+  Chip,
   Paper,
   Stack,
   TextField,
@@ -12,11 +13,12 @@ import {
 import Grid from "@mui/material/Grid2";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DownloadIcon from "@mui/icons-material/Download";
+import FolderZipIcon from "@mui/icons-material/FolderZip";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import { useRef, useState } from "react";
-import { transform } from "../api";
-import type { TransformDirection } from "../types";
+import { transform, transformZip } from "../api";
+import type { TransformDirection, TransformZipFile } from "../types";
 
 interface Props {
   onToast: (message: string) => void;
@@ -34,20 +36,44 @@ const SUB2API_SAMPLE = `{
   ]
 }`;
 
-const CPA_SAMPLE = `{
-  "accounts": [
-    {
-      "email": "user@example.com",
-      "tokens": { "id_token": "...", "access_token": "...", "refresh_token": "v1.MzEy..." }
-    }
-  ]
-}`;
+const CPA_SAMPLE = `[
+  {
+    "id_token": "...",
+    "access_token": "...",
+    "refresh_token": "v1.MzEy...",
+    "account_id": "account-...",
+    "email": "user@example.com",
+    "type": "codex",
+    "expired": "2026-06-06T05:28:57.000Z"
+  }
+]
+
+也支持本工具导出的 {"accounts":[{"tokens":{...}}]} 结果。`;
+
+async function readTextFile(file: File): Promise<TransformZipFile> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve({ name: file.name, input: String(reader.result ?? "") });
+    reader.onerror = () => reject(reader.error ?? new Error(`读取失败: ${file.name}`));
+    reader.readAsText(file);
+  });
+}
+
+function saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 /// Offline format converter UI (CPA <-> Sub2API). Pure transform, no refresh.
 export function TransformPanel({ onToast }: Props) {
   const [direction, setDirection] = useState<TransformDirection>("sub2api_to_cpa");
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
+  const [batchFiles, setBatchFiles] = useState<TransformZipFile[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -56,13 +82,23 @@ export function TransformPanel({ onToast }: Props) {
   const targetLabel = direction === "sub2api_to_cpa" ? "CPA" : "Sub2API";
   const sample = direction === "sub2api_to_cpa" ? SUB2API_SAMPLE : CPA_SAMPLE;
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setInput(String(reader.result ?? ""));
-    reader.readAsText(file);
-    e.target.value = "";
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const files = Array.from(e.target.files ?? []);
+      if (files.length === 0) return;
+      const loaded = await Promise.all(files.map(readTextFile));
+      setBatchFiles(loaded);
+      setInput(loaded[0]?.input ?? "");
+      setOutput("");
+      onToast(`已导入 ${loaded.length} 个文件`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+      e.target.value = "";
+    }
   };
 
   const run = async () => {
@@ -88,14 +124,30 @@ export function TransformPanel({ onToast }: Props) {
   const downloadOutput = () => {
     if (!output) return;
     const name = direction === "sub2api_to_cpa" ? "cpa-accounts.json" : "sub2api-export.json";
-    const blob = new Blob([output], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = name;
-    a.click();
-    URL.revokeObjectURL(url);
+    saveBlob(new Blob([output], { type: "application/json" }), name);
     onToast(`已下载 ${name}`);
+  };
+
+  const downloadBatchZip = async () => {
+    const files = batchFiles.length > 0
+      ? batchFiles
+      : [{ name: direction === "sub2api_to_cpa" ? "sub2api.json" : "cpa.json", input }];
+    setBusy(true);
+    setError(null);
+    try {
+      const blob = await transformZip(direction, files);
+      saveBlob(blob, "format-transform.zip");
+      onToast("已下载 format-transform.zip");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const clearBatchFiles = () => {
+    setBatchFiles([]);
+    onToast("已清空批量文件");
   };
 
   return (
@@ -136,21 +188,40 @@ export function TransformPanel({ onToast }: Props) {
                   输入（{sourceLabel}）
                 </Typography>
                 <Box>
-                  <input ref={fileRef} type="file" accept=".json" hidden onChange={handleFile} />
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept=".json,.txt"
+                    multiple
+                    hidden
+                    onChange={handleFile}
+                  />
                   <Button
                     size="small"
                     startIcon={<UploadFileIcon />}
                     onClick={() => fileRef.current?.click()}
+                    disabled={busy}
                   >
-                    导入
+                    批量导入
                   </Button>
                 </Box>
               </Stack>
+              {batchFiles.length > 0 && (
+                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                  <Chip size="small" label={`已选 ${batchFiles.length} 个文件`} />
+                  <Button size="small" onClick={clearBatchFiles} disabled={busy}>
+                    清空
+                  </Button>
+                </Stack>
+              )}
               <TextField
                 multiline
                 minRows={16}
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  setBatchFiles([]);
+                }}
                 placeholder={sample}
                 fullWidth
                 slotProps={{ htmlInput: { style: { fontFamily: "monospace", fontSize: 12 } } }}
@@ -204,7 +275,15 @@ export function TransformPanel({ onToast }: Props) {
           onClick={run}
           disabled={busy || !input.trim()}
         >
-          转换
+          转换当前输入
+        </Button>
+        <Button
+          variant="outlined"
+          startIcon={<FolderZipIcon />}
+          onClick={downloadBatchZip}
+          disabled={busy || (!input.trim() && batchFiles.length === 0)}
+        >
+          批量转换并下载 ZIP
         </Button>
       </Stack>
     </Paper>

@@ -8,7 +8,12 @@ use std::time::Duration;
 
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use chrono::{DateTime, Utc};
-use codex_core::{converter::CodexConverter, input::parse_input, models::CodexAccount};
+use codex_core::{
+    converter::CodexConverter,
+    input::parse_input,
+    models::CodexAccount,
+    transform::{DEFAULT_SUB2API_CONCURRENCY, DEFAULT_SUB2API_PRIORITY},
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 
@@ -27,6 +32,10 @@ pub struct Sub2ApiImportRequest {
     pub timeout_secs: Option<u64>,
     #[serde(default)]
     pub concurrency: Option<usize>,
+    #[serde(default)]
+    pub account_concurrency: Option<i64>,
+    #[serde(default)]
+    pub priority: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -81,6 +90,24 @@ struct Sub2ApiAccountDraft {
     email: Option<String>,
     expires_at: Option<String>,
     payload: Value,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Sub2ApiAccountOptions {
+    concurrency: i64,
+    priority: i64,
+}
+
+impl Sub2ApiAccountOptions {
+    fn from_request(req: &Sub2ApiImportRequest) -> Self {
+        Self {
+            concurrency: req
+                .account_concurrency
+                .unwrap_or(DEFAULT_SUB2API_CONCURRENCY)
+                .max(0),
+            priority: req.priority.unwrap_or(DEFAULT_SUB2API_PRIORITY),
+        }
+    }
 }
 
 pub async fn login(Json(req): Json<Sub2ApiLoginRequest>) -> axum::response::Response {
@@ -272,7 +299,9 @@ pub async fn import_access_tokens(
     let accounts: Vec<Sub2ApiAccountDraft> = tokens
         .iter()
         .enumerate()
-        .map(|(index, token)| build_access_token_account(index, token))
+        .map(|(index, token)| {
+            build_access_token_account(index, token, Sub2ApiAccountOptions::from_request(&req))
+        })
         .collect();
 
     let client = match sub2api_client() {
@@ -332,7 +361,9 @@ pub async fn import_api_keys(Json(req): Json<Sub2ApiImportRequest>) -> axum::res
     let accounts: Vec<Sub2ApiAccountDraft> = keys
         .iter()
         .enumerate()
-        .map(|(index, key)| build_api_key_account(index, key))
+        .map(|(index, key)| {
+            build_api_key_account(index, key, Sub2ApiAccountOptions::from_request(&req))
+        })
         .collect();
 
     let client = match sub2api_client() {
@@ -412,7 +443,9 @@ pub async fn import_refresh_tokens(
         .accounts
         .iter()
         .enumerate()
-        .map(|(index, account)| build_refreshed_account(index, account))
+        .map(|(index, account)| {
+            build_refreshed_account(index, account, Sub2ApiAccountOptions::from_request(&req))
+        })
         .collect();
 
     if accounts.is_empty() {
@@ -492,11 +525,10 @@ fn sub2api_client() -> Result<reqwest::Client, String> {
 
 fn add_sub2api_auth(builder: reqwest::RequestBuilder, credential: &str) -> reqwest::RequestBuilder {
     let trimmed = credential.trim();
-    let token = trimmed
+    if let Some(token) = trimmed
         .strip_prefix("Bearer ")
         .or_else(|| trimmed.strip_prefix("bearer "))
-        .unwrap_or(trimmed);
-    if token.matches('.').count() == 2 {
+    {
         builder.header("Authorization", format!("Bearer {token}"))
     } else {
         builder.header("x-api-key", trimmed)
@@ -658,7 +690,11 @@ fn looks_like_api_key(raw: &str) -> bool {
     key.len() >= 20 && (key.starts_with("sk-") || key.starts_with("sess-"))
 }
 
-fn build_access_token_account(index: usize, access_token: &str) -> Sub2ApiAccountDraft {
+fn build_access_token_account(
+    index: usize,
+    access_token: &str,
+    options: Sub2ApiAccountOptions,
+) -> Sub2ApiAccountDraft {
     let claims = codex_core::jwt::decode_payload(access_token).ok();
     let email = claims
         .as_ref()
@@ -717,8 +753,8 @@ fn build_access_token_account(index: usize, access_token: &str) -> Sub2ApiAccoun
         "platform": "openai",
         "type": "oauth",
         "credentials": Value::Object(credentials),
-        "concurrency": 0,
-        "priority": 0,
+        "concurrency": options.concurrency,
+        "priority": options.priority,
         "confirm_mixed_channel_risk": true,
     });
 
@@ -730,7 +766,11 @@ fn build_access_token_account(index: usize, access_token: &str) -> Sub2ApiAccoun
     }
 }
 
-fn build_api_key_account(index: usize, api_key: &str) -> Sub2ApiAccountDraft {
+fn build_api_key_account(
+    index: usize,
+    api_key: &str,
+    options: Sub2ApiAccountOptions,
+) -> Sub2ApiAccountDraft {
     let name = format!("openai-apikey-{}", mask_secret_tail(api_key, index + 1));
     let payload = json!({
         "name": name,
@@ -739,8 +779,8 @@ fn build_api_key_account(index: usize, api_key: &str) -> Sub2ApiAccountDraft {
         "credentials": {
             "api_key": api_key,
         },
-        "concurrency": 0,
-        "priority": 0,
+        "concurrency": options.concurrency,
+        "priority": options.priority,
         "confirm_mixed_channel_risk": true,
     });
 
@@ -752,7 +792,11 @@ fn build_api_key_account(index: usize, api_key: &str) -> Sub2ApiAccountDraft {
     }
 }
 
-fn build_refreshed_account(index: usize, account: &CodexAccount) -> Sub2ApiAccountDraft {
+fn build_refreshed_account(
+    index: usize,
+    account: &CodexAccount,
+    options: Sub2ApiAccountOptions,
+) -> Sub2ApiAccountDraft {
     let name = account
         .email
         .clone()
@@ -799,8 +843,8 @@ fn build_refreshed_account(index: usize, account: &CodexAccount) -> Sub2ApiAccou
         "platform": "openai",
         "type": "oauth",
         "credentials": Value::Object(credentials),
-        "concurrency": 0,
-        "priority": 0,
+        "concurrency": options.concurrency,
+        "priority": options.priority,
         "confirm_mixed_channel_risk": true,
     });
 
@@ -1017,6 +1061,59 @@ mod tests {
                 "sk-test-abcdefghijklmnopqrstuvwxyz",
                 "sess-test-abcdefghijklmnopqrstuvwxyz"
             ]
+        );
+    }
+
+    #[test]
+    fn account_options_default_to_nonzero_values() {
+        let req = Sub2ApiImportRequest {
+            base_url: "http://localhost:8080".to_string(),
+            admin_key: "admin".to_string(),
+            input: "sk-test-abcdefghijklmnopqrstuvwxyz".to_string(),
+            group_ids: Vec::new(),
+            timeout_secs: None,
+            concurrency: None,
+            account_concurrency: None,
+            priority: None,
+        };
+
+        let options = Sub2ApiAccountOptions::from_request(&req);
+        assert_eq!(options.concurrency, DEFAULT_SUB2API_CONCURRENCY);
+        assert_eq!(options.priority, DEFAULT_SUB2API_PRIORITY);
+    }
+
+    #[test]
+    fn account_payload_uses_user_schedule_options() {
+        let options = Sub2ApiAccountOptions {
+            concurrency: 8,
+            priority: 66,
+        };
+        let account = build_api_key_account(0, "sk-test-abcdefghijklmnopqrstuvwxyz", options);
+
+        assert_eq!(account.payload["concurrency"].as_i64(), Some(8));
+        assert_eq!(account.payload["priority"].as_i64(), Some(66));
+    }
+
+    #[test]
+    fn dotted_admin_key_still_uses_api_key_header() {
+        let client = reqwest::Client::new();
+        let req = add_sub2api_auth(client.get("http://example.test"), "adm.in.key")
+            .build()
+            .unwrap();
+        assert_eq!(
+            req.headers().get("x-api-key").and_then(|v| v.to_str().ok()),
+            Some("adm.in.key")
+        );
+        assert!(req.headers().get("authorization").is_none());
+
+        let req = add_sub2api_auth(client.get("http://example.test"), "Bearer jwt.token.value")
+            .build()
+            .unwrap();
+        assert_eq!(
+            req.headers()
+                .get("authorization")
+                .and_then(|v| v.to_str().ok()),
+            Some("Bearer jwt.token.value")
         );
     }
 }

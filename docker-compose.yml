@@ -10,6 +10,7 @@ services:
     environment:
       # Listen port inside the container.
       PORT: "8787"
+      BIND_ADDR: "0.0.0.0"
       CODEX_CONVERTER_TIMEOUT: "25"
       CODEX_CONVERTER_CONCURRENCY: "4"
       RUST_LOG: "codex_backend=info,tower_http=info"

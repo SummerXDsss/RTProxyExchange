@@ -131,6 +131,18 @@ fn parse_input_sub2api_export() {
 }
 
 #[test]
+fn parse_input_internal_batch_result() {
+    let batch = json!({
+        "exported_at": "2026-04-18T12:00:00Z",
+        "accounts": [
+            { "email": "u@example.com", "tokens": { "refresh_token": "v1.codex" } }
+        ]
+    });
+    let tokens = parse_input(&batch.to_string()).unwrap();
+    assert_eq!(tokens, vec!["v1.codex"]);
+}
+
+#[test]
 fn parse_input_json_array() {
     let input = r#"["v1.x", {"refresh_token": "v1.y"}]"#;
     assert_eq!(parse_input(input).unwrap(), vec!["v1.x", "v1.y"]);
@@ -155,6 +167,14 @@ fn parse_input_bare_json_object_stream() {
 fn sub2api_detection() {
     let export = json!({ "exported_at": "now", "accounts": [] });
     assert!(looks_like_sub2api_export(&export));
+    let batch_result = json!({
+        "exported_at": "now",
+        "accounts": [{
+            "email": "u@example.com",
+            "tokens": { "refresh_token": "rt", "access_token": "at", "id_token": "it" }
+        }]
+    });
+    assert!(!looks_like_sub2api_export(&batch_result));
     let plain = json!({ "refresh_token": "x" });
     assert!(!looks_like_sub2api_export(&plain));
 }
@@ -246,6 +266,35 @@ fn sub2api_to_cpa_maps_fields() {
 }
 
 #[test]
+fn sub2api_to_cpa_skips_api_key_accounts() {
+    use crate::transform::sub2api_json_to_cpa;
+
+    let export = serde_json::json!({
+        "exported_at": "2026-04-18T12:00:00Z",
+        "accounts": [
+            {
+                "platform": "openai",
+                "type": "apikey",
+                "credentials": { "api_key": "sk-test" }
+            },
+            {
+                "platform": "openai",
+                "type": "oauth",
+                "email": "top@example.com",
+                "credentials": { "access_token": "at" }
+            }
+        ],
+        "type": "subdata",
+        "version": 1
+    });
+
+    let accounts = sub2api_json_to_cpa(&export.to_string()).unwrap();
+    assert_eq!(accounts.len(), 1);
+    assert_eq!(accounts[0].access_token, "at");
+    assert_eq!(accounts[0].email.as_deref(), Some("top@example.com"));
+}
+
+#[test]
 fn cpa_to_sub2api_maps_fields() {
     use crate::transform::cpa_json_to_sub2api;
 
@@ -275,6 +324,44 @@ fn cpa_to_sub2api_maps_fields() {
     assert_eq!(
         a.credentials.expires_at.as_deref(),
         Some("2026-06-06T05:28:57.000Z")
+    );
+    assert_eq!(a.concurrency, crate::transform::DEFAULT_SUB2API_CONCURRENCY);
+    assert_eq!(a.priority, crate::transform::DEFAULT_SUB2API_PRIORITY);
+}
+
+#[test]
+fn cpa_to_sub2api_accepts_internal_batch_result() {
+    use crate::transform::cpa_json_to_sub2api;
+
+    let batch = serde_json::json!({
+        "exported_at": "2026-04-18T12:00:00Z",
+        "total": 1,
+        "success": 1,
+        "failed": 0,
+        "errors": [],
+        "accounts": [{
+            "id": "codex-user",
+            "email": "u@example.com",
+            "account_id": "account-1",
+            "subscription_active_until": "2026-06-06T05:28:57.000Z",
+            "tokens": {
+                "id_token": "it",
+                "access_token": "at",
+                "refresh_token": "rt_abc"
+            }
+        }]
+    });
+
+    let export = cpa_json_to_sub2api(&batch.to_string()).unwrap();
+    assert_eq!(export.accounts.len(), 1);
+    let account = &export.accounts[0];
+    assert_eq!(account.credentials.refresh_token, "rt_abc");
+    assert_eq!(account.credentials.access_token, "at");
+    assert_eq!(account.credentials.id_token, "it");
+    assert_eq!(account.credentials.email.as_deref(), Some("u@example.com"));
+    assert_eq!(
+        account.credentials.chatgpt_account_id.as_deref(),
+        Some("account-1")
     );
 }
 

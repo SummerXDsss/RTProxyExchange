@@ -39,9 +39,12 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{CoreError, Result};
-use crate::input::parse_json_object_stream;
+use crate::input::{looks_like_sub2api_export, parse_json_object_stream};
 use crate::jwt::extract_user_info;
-use crate::models::TokenResponse;
+use crate::models::{CodexAccount, TokenResponse};
+
+pub const DEFAULT_SUB2API_CONCURRENCY: i64 = 3;
+pub const DEFAULT_SUB2API_PRIORITY: i64 = 50;
 
 // ---------------------------------------------------------------------------
 // Cockpit-tools / CPA flat account
@@ -68,7 +71,12 @@ pub struct CpaAccount {
     pub email: Option<String>,
     #[serde(rename = "type", default = "default_codex_type")]
     pub kind: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        alias = "expires_at",
+        alias = "subscription_active_until",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub expired: Option<String>,
 }
 
@@ -106,15 +114,17 @@ pub struct Sub2ApiCredentials {
 pub struct Sub2ApiAccount {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
     #[serde(default = "default_platform")]
     pub platform: String,
     #[serde(rename = "type", default = "default_oauth_type")]
     pub kind: String,
     #[serde(default)]
     pub credentials: Sub2ApiCredentials,
-    #[serde(default)]
+    #[serde(default = "default_sub2api_concurrency")]
     pub concurrency: i64,
-    #[serde(default)]
+    #[serde(default = "default_sub2api_priority")]
     pub priority: i64,
 }
 
@@ -129,6 +139,12 @@ fn default_subdata_type() -> String {
 }
 fn default_version() -> i64 {
     1
+}
+fn default_sub2api_concurrency() -> i64 {
+    DEFAULT_SUB2API_CONCURRENCY
+}
+fn default_sub2api_priority() -> i64 {
+    DEFAULT_SUB2API_PRIORITY
 }
 
 /// A Sub2API export wrapper document.
@@ -184,21 +200,68 @@ pub fn parse_cpa_accounts(json: &str) -> Result<Vec<CpaAccount>> {
 
 fn cpa_accounts_from_value(value: serde_json::Value) -> Result<Vec<CpaAccount>> {
     // Auto-detect a Sub2API export and convert it down to flat CPA accounts.
-    if value.get("accounts").is_some()
-        && (value.get("exported_at").is_some() || value.get("version").is_some())
-    {
+    if looks_like_sub2api_export(&value) {
         let export: Sub2ApiExport =
             serde_json::from_value(value).map_err(|e| CoreError::JsonParse(e.to_string()))?;
         return Ok(export.accounts.iter().map(sub2api_account_to_cpa).collect());
     }
 
-    let accounts_value = match value {
-        serde_json::Value::Array(_) => value,
-        serde_json::Value::Object(_) => serde_json::Value::Array(vec![value]),
-        _ => return Err(CoreError::JsonParse("unexpected CPA JSON shape".into())),
-    };
+    match value {
+        serde_json::Value::Array(items) => items
+            .into_iter()
+            .map(cpa_account_from_value)
+            .collect::<Result<Vec<_>>>(),
+        serde_json::Value::Object(obj) => {
+            if let Some(serde_json::Value::Array(items)) = obj.get("accounts") {
+                return items
+                    .iter()
+                    .cloned()
+                    .map(cpa_account_from_value)
+                    .collect::<Result<Vec<_>>>();
+            }
 
-    serde_json::from_value(accounts_value).map_err(|e| CoreError::JsonParse(e.to_string()))
+            cpa_account_from_value(serde_json::Value::Object(obj)).map(|account| vec![account])
+        }
+        _ => return Err(CoreError::JsonParse("unexpected CPA JSON shape".into())),
+    }
+}
+
+fn looks_like_sub2api_account(value: &serde_json::Value) -> bool {
+    value.get("credentials").is_some()
+        && (value.get("platform").is_some() || value.get("type").is_some())
+}
+
+fn cpa_account_from_value(value: serde_json::Value) -> Result<CpaAccount> {
+    if looks_like_sub2api_account(&value) {
+        let account: Sub2ApiAccount =
+            serde_json::from_value(value).map_err(|e| CoreError::JsonParse(e.to_string()))?;
+        return Ok(sub2api_account_to_cpa(&account));
+    }
+
+    if value
+        .get("tokens")
+        .and_then(serde_json::Value::as_object)
+        .is_some()
+    {
+        let account: CodexAccount =
+            serde_json::from_value(value).map_err(|e| CoreError::JsonParse(e.to_string()))?;
+        return Ok(codex_account_to_cpa(&account));
+    }
+
+    serde_json::from_value(value).map_err(|e| CoreError::JsonParse(e.to_string()))
+}
+
+fn codex_account_to_cpa(account: &CodexAccount) -> CpaAccount {
+    CpaAccount {
+        id_token: account.tokens.id_token.clone(),
+        access_token: account.tokens.access_token.clone(),
+        refresh_token: account.tokens.refresh_token.clone(),
+        account_id: account.account_id.clone(),
+        last_refresh: Some(Utc::now().to_rfc3339()),
+        email: account.email.clone(),
+        kind: "codex".to_string(),
+        expired: account.subscription_active_until.clone(),
+    }
 }
 
 /// Parse a Sub2API export from JSON text.
@@ -241,6 +304,7 @@ pub fn cpa_to_sub2api_account(account: &CpaAccount) -> Sub2ApiAccount {
 
     Sub2ApiAccount {
         name: email.clone(),
+        email: email.clone(),
         platform: "openai".to_string(),
         kind: "oauth".to_string(),
         credentials: Sub2ApiCredentials {
@@ -253,8 +317,8 @@ pub fn cpa_to_sub2api_account(account: &CpaAccount) -> Sub2ApiAccount {
             chatgpt_user_id,
             plan_type,
         },
-        concurrency: 0,
-        priority: 0,
+        concurrency: DEFAULT_SUB2API_CONCURRENCY,
+        priority: DEFAULT_SUB2API_PRIORITY,
     }
 }
 
@@ -282,7 +346,11 @@ pub fn sub2api_account_to_cpa(account: &Sub2ApiAccount) -> CpaAccount {
         refresh_token: creds.refresh_token.clone(),
         account_id: creds.chatgpt_account_id.clone(),
         last_refresh: Some(Utc::now().to_rfc3339()),
-        email: creds.email.clone().or_else(|| account.name.clone()),
+        email: creds
+            .email
+            .clone()
+            .or_else(|| account.email.clone())
+            .or_else(|| account.name.clone()),
         kind: "codex".to_string(),
         expired: creds.expires_at.clone(),
     }
@@ -290,7 +358,17 @@ pub fn sub2api_account_to_cpa(account: &Sub2ApiAccount) -> CpaAccount {
 
 /// Convert all accounts in a Sub2API export into flat CPA accounts.
 pub fn sub2api_export_to_cpa(export: &Sub2ApiExport) -> Vec<CpaAccount> {
-    export.accounts.iter().map(sub2api_account_to_cpa).collect()
+    export
+        .accounts
+        .iter()
+        .filter(|account| account.platform == "openai" && account.kind == "oauth")
+        .map(sub2api_account_to_cpa)
+        .filter(|account| {
+            !account.id_token.is_empty()
+                || !account.access_token.is_empty()
+                || !account.refresh_token.is_empty()
+        })
+        .collect()
 }
 
 /// Parse a Sub2API export from JSON text, then convert to CPA accounts.

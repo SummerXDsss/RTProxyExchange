@@ -39,18 +39,22 @@ pub fn find_refresh_token(value: &Value) -> Option<String> {
 
 /// Heuristic: does this JSON value look like a Sub2API export payload?
 pub fn looks_like_sub2api_export(value: &Value) -> bool {
-    if value.get("exported_at").is_some() || value.get("proxies").is_some() {
+    let Some(accounts) = value.get("accounts").and_then(Value::as_array) else {
+        return false;
+    };
+
+    let kind = value.get("type").and_then(Value::as_str);
+    if kind == Some("subdata") || value.get("proxies").is_some() {
         return true;
     }
-    value
-        .get("accounts")
-        .and_then(Value::as_array)
-        .map(|accounts| {
-            accounts
-                .iter()
-                .any(|a| a.get("credentials").is_some() && a.get("platform").is_some())
-        })
-        .unwrap_or(false)
+
+    if accounts.is_empty() {
+        return value.get("exported_at").is_some();
+    }
+
+    accounts
+        .iter()
+        .any(|a| a.get("credentials").is_some() && a.get("platform").is_some())
 }
 
 /// Is a Sub2API account a Codex OAuth account?
@@ -136,6 +140,13 @@ fn tokens_from_json(value: &Value) -> Result<Vec<String>> {
                         }
                     }
                 }
+                if out.is_empty() {
+                    Err(CoreError::NoRefreshToken)
+                } else {
+                    Ok(out)
+                }
+            } else if let Some(accounts) = value.get("accounts").and_then(Value::as_array) {
+                let out: Vec<String> = accounts.iter().filter_map(find_refresh_token).collect();
                 if out.is_empty() {
                     Err(CoreError::NoRefreshToken)
                 } else {

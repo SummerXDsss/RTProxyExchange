@@ -102,6 +102,8 @@ export function Sub2ApiAtImportPanel({ onToast }: { onToast: (message: string) =
   const [loginPassword, setLoginPassword] = useState("");
   const [loginToken, setLoginToken] = useState("");
   const [rememberKey, setRememberKey] = useState(false);
+  const [accountConcurrency, setAccountConcurrency] = useState("3");
+  const [accountPriority, setAccountPriority] = useState("50");
   const [input, setInput] = useState("");
   const [testing, setTesting] = useState(false);
   const [loggingIn, setLoggingIn] = useState(false);
@@ -133,6 +135,11 @@ export function Sub2ApiAtImportPanel({ onToast }: { onToast: (message: string) =
   };
 
   const authCredential = loginToken || adminKey;
+
+  const numberOrUndefined = (value: string): number | undefined => {
+    const n = Number(value);
+    return value.trim() && Number.isFinite(n) ? n : undefined;
+  };
 
   const loadGroups = async (credential = authCredential) => {
     if (!baseUrl.trim() || !credential.trim()) return;
@@ -183,11 +190,12 @@ export function Sub2ApiAtImportPanel({ onToast }: { onToast: (message: string) =
     setTested(null);
     try {
       const res = await sub2apiLogin(baseUrl.trim(), loginEmail.trim(), loginPassword);
-      setLoginToken(res.access_token);
+      const bearer = `Bearer ${res.access_token}`;
+      setLoginToken(bearer);
       setLoginPassword("");
       setTested(res.email ? `登录成功：${res.email}` : "登录成功");
       persist();
-      await loadGroups(res.access_token);
+      await loadGroups(bearer);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -200,11 +208,15 @@ export function Sub2ApiAtImportPanel({ onToast }: { onToast: (message: string) =
     setError(null);
     setResult(null);
     try {
+      const options = {
+        accountConcurrency: numberOrUndefined(accountConcurrency),
+        priority: numberOrUndefined(accountPriority),
+      };
       const res = importMode === "at"
-        ? await sub2apiImportAt(baseUrl.trim(), authCredential, input, selectedGroupIds)
+        ? await sub2apiImportAt(baseUrl.trim(), authCredential, input, selectedGroupIds, options)
         : importMode === "api_key"
-          ? await sub2apiImportApiKeys(baseUrl.trim(), authCredential, input, selectedGroupIds)
-          : await sub2apiImportRefreshTokens(baseUrl.trim(), authCredential, input, selectedGroupIds);
+          ? await sub2apiImportApiKeys(baseUrl.trim(), authCredential, input, selectedGroupIds, options)
+          : await sub2apiImportRefreshTokens(baseUrl.trim(), authCredential, input, selectedGroupIds, options);
       setResult(res);
       persist();
       const label = importMode === "at" ? "AT" : importMode === "api_key" ? "API Key" : "RT 刷新";
@@ -334,8 +346,29 @@ export function Sub2ApiAtImportPanel({ onToast }: { onToast: (message: string) =
             checked={rememberKey}
             onChange={(e) => setRememberKey(e.target.checked)}
           />
-          记住密钥(本地)
+          记住密钥/JWT（本机明文）
         </label>
+      </Stack>
+
+      <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+        <TextField
+          label="Sub2API 调度数量"
+          value={accountConcurrency}
+          onChange={(e) => setAccountConcurrency(e.target.value)}
+          type="number"
+          size="small"
+          fullWidth
+          slotProps={{ htmlInput: { min: 0, step: 1 } }}
+        />
+        <TextField
+          label="Sub2API 优先级"
+          value={accountPriority}
+          onChange={(e) => setAccountPriority(e.target.value)}
+          type="number"
+          size="small"
+          fullWidth
+          slotProps={{ htmlInput: { step: 1 } }}
+        />
       </Stack>
 
       {groups.length > 0 && (
@@ -392,7 +425,7 @@ export function Sub2ApiAtImportPanel({ onToast }: { onToast: (message: string) =
           一键导入 Sub2API
         </Button>
         <Typography variant="caption" color="text.secondary">
-          Admin Key 只用于本次请求转发，不会服务端存储。
+          Admin Key 只用于本次请求转发，不会服务端存储；勾选记住会保存到本机浏览器明文。
         </Typography>
       </Stack>
 

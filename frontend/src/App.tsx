@@ -46,11 +46,37 @@ import {
   type OutputFormat,
 } from "./formats";
 
+type MainSection = "sub2api" | "cliproxyapi" | "tools";
+type AppTab = "sub2api_import" | "convert" | "format" | "split" | "free" | "update";
+
+const SECTION_DEFAULT_TAB: Record<MainSection, AppTab> = {
+  sub2api: "sub2api_import",
+  cliproxyapi: "convert",
+  tools: "update",
+};
+
+const SECTION_TABS: Record<MainSection, { value: AppTab; label: string }[]> = {
+  sub2api: [
+    { value: "sub2api_import", label: "Sub2API 导入" },
+    { value: "format", label: "Sub / CPA 互转" },
+    { value: "split", label: "账号拆分" },
+    { value: "free", label: "Free 号转换" },
+  ],
+  cliproxyapi: [
+    { value: "convert", label: "转换 / 登录" },
+    { value: "format", label: "Sub / CPA 互转" },
+    { value: "split", label: "账号拆分" },
+    { value: "free", label: "Free 号转换" },
+  ],
+  tools: [{ value: "update", label: "检查更新" }],
+};
+
 export function App() {
   const { mode, toggle, theme } = useColorMode();
   const history = useHistory();
 
-  const [tab, setTab] = useState(0);
+  const [section, setSection] = useState<MainSection>("sub2api");
+  const [tab, setTab] = useState<AppTab>("sub2api_import");
   const [inputMode, setInputMode] = useState<Mode>("single");
   const [input, setInput] = useState("");
   const [timeout, setTimeout] = useState("");
@@ -312,13 +338,22 @@ export function App() {
         </AppBar>
 
         <Container maxWidth="lg" sx={{ py: 3 }}>
-          <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
-            <Tab label="转换 / 登录" />
-            <Tab label="格式转换" />
-            <Tab label="账号拆分" />
-            <Tab label="Free 号转换" />
-            <Tab label="Sub2API 导入" />
-            <Tab label="检查更新" />
+          <Tabs
+            value={section}
+            onChange={(_, v: MainSection) => {
+              setSection(v);
+              setTab(SECTION_DEFAULT_TAB[v]);
+            }}
+            sx={{ mb: 1 }}
+          >
+            <Tab value="sub2api" label="Sub2API 类" />
+            <Tab value="cliproxyapi" label="CLIProxyAPI 类" />
+            <Tab value="tools" label="工具" />
+          </Tabs>
+          <Tabs value={tab} onChange={(_, v: AppTab) => setTab(v)} sx={{ mb: 2 }}>
+            {SECTION_TABS[section].map((item) => (
+              <Tab key={item.value} value={item.value} label={item.label} />
+            ))}
           </Tabs>
 
           {error && (
@@ -327,7 +362,7 @@ export function App() {
             </Alert>
           )}
 
-          {tab === 0 ? (
+          {tab === "convert" ? (
             <Grid container spacing={3}>
               <Grid size={{ xs: 12, md: 5 }}>
                 <Paper sx={{ p: 2.5 }}>
@@ -375,11 +410,11 @@ export function App() {
                 </Paper>
               </Grid>
             </Grid>
-          ) : tab === 1 ? (
+          ) : tab === "format" ? (
             <TransformPanel onToast={setToast} />
-          ) : tab === 2 ? (
+          ) : tab === "split" ? (
             <SplitPanel onToast={setToast} />
-          ) : tab === 3 ? (
+          ) : tab === "free" ? (
             <SplitPanel
               onToast={setToast}
               title="Free 号转换"
@@ -391,7 +426,7 @@ export function App() {
               }
               sample={FREE_SAMPLE}
             />
-          ) : tab === 4 ? (
+          ) : tab === "sub2api_import" ? (
             <Paper sx={{ p: 2.5 }}>
               <Sub2ApiAtImportPanel onToast={setToast} />
             </Paper>

@@ -12,6 +12,7 @@ import type {
   Sub2ApiGroup,
   Sub2ApiImportResponse,
   Sub2ApiLoginResponse,
+  TransformZipFile,
   TransformRequest,
   UpdateStatus,
 } from "./types";
@@ -78,6 +79,20 @@ export async function transform(req: TransformRequest): Promise<unknown> {
   });
   if (!resp.ok) throw new Error(await errorMessage(resp));
   return resp.json();
+}
+
+/// Batch offline transform and download the converted JSON files as a zip.
+export async function transformZip(
+  direction: TransformRequest["direction"],
+  files: TransformZipFile[],
+): Promise<Blob> {
+  const resp = await fetch("/api/transform/zip", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ direction, files }),
+  });
+  if (!resp.ok) throw new Error(await errorMessage(resp));
+  return resp.blob();
 }
 
 /// Split a batch of accounts into per-account entries (both formats included).
@@ -198,11 +213,19 @@ export async function sub2apiImportAt(
   adminKey: string,
   input: string,
   groupIds: number[] = [],
+  options: { accountConcurrency?: number; priority?: number } = {},
 ): Promise<Sub2ApiImportResponse> {
   const resp = await fetch("/api/sub2api/import-at", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ base_url: baseUrl, admin_key: adminKey, input, group_ids: groupIds }),
+    body: JSON.stringify({
+      base_url: baseUrl,
+      admin_key: adminKey,
+      input,
+      group_ids: groupIds,
+      account_concurrency: options.accountConcurrency,
+      priority: options.priority,
+    }),
   });
   if (!resp.ok) throw new Error(await errorMessage(resp));
   return resp.json();
@@ -214,11 +237,19 @@ export async function sub2apiImportApiKeys(
   adminKey: string,
   input: string,
   groupIds: number[] = [],
+  options: { accountConcurrency?: number; priority?: number } = {},
 ): Promise<Sub2ApiImportResponse> {
   const resp = await fetch("/api/sub2api/import-api-keys", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ base_url: baseUrl, admin_key: adminKey, input, group_ids: groupIds }),
+    body: JSON.stringify({
+      base_url: baseUrl,
+      admin_key: adminKey,
+      input,
+      group_ids: groupIds,
+      account_concurrency: options.accountConcurrency,
+      priority: options.priority,
+    }),
   });
   if (!resp.ok) throw new Error(await errorMessage(resp));
   return resp.json();
@@ -230,11 +261,19 @@ export async function sub2apiImportRefreshTokens(
   adminKey: string,
   input: string,
   groupIds: number[] = [],
+  options: { accountConcurrency?: number; priority?: number } = {},
 ): Promise<Sub2ApiImportResponse> {
   const resp = await fetch("/api/sub2api/import-refresh-tokens", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ base_url: baseUrl, admin_key: adminKey, input, group_ids: groupIds }),
+    body: JSON.stringify({
+      base_url: baseUrl,
+      admin_key: adminKey,
+      input,
+      group_ids: groupIds,
+      account_concurrency: options.accountConcurrency,
+      priority: options.priority,
+    }),
   });
   if (!resp.ok) throw new Error(await errorMessage(resp));
   return resp.json();

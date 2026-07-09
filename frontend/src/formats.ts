@@ -12,6 +12,9 @@ import type { CodexAccount } from "./types";
 /// Output format options offered in copy/download menus.
 export type OutputFormat = "cpa" | "sub2api";
 
+export const DEFAULT_SUB2API_CONCURRENCY = 3;
+export const DEFAULT_SUB2API_PRIORITY = 50;
+
 /// Flat cockpit-tools / CPA account object.
 export interface CockpitAccount {
   id_token: string;
@@ -82,8 +85,8 @@ function toSub2apiAccount(account: CodexAccount): Sub2apiAccount {
       chatgpt_user_id: account.user_id,
       plan_type: account.plan_type,
     },
-    concurrency: 0,
-    priority: 0,
+    concurrency: DEFAULT_SUB2API_CONCURRENCY,
+    priority: DEFAULT_SUB2API_PRIORITY,
   };
 }
 

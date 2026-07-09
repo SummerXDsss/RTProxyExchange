@@ -46,6 +46,7 @@ COPY --from=frontend /frontend/dist /app/frontend/dist
 COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 
 ENV PORT=8787 \
+    BIND_ADDR=0.0.0.0 \
     STATIC_DIR=/app/frontend/dist \
     RUST_LOG=codex_backend=info,tower_http=info
 

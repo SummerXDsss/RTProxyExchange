@@ -117,6 +117,11 @@ export interface TransformRequest {
   direction: TransformDirection;
 }
 
+export interface TransformZipFile {
+  name: string;
+  input: string;
+}
+
 /// Output format for split account files.
 export type SplitFormat = "cpa" | "sub2api";
 

@@ -5,7 +5,10 @@ mod cpa;
 mod split;
 mod sub2api;
 
-use std::{net::SocketAddr, sync::Arc};
+use std::{
+    net::{IpAddr, SocketAddr},
+    sync::Arc,
+};
 
 use axum::{
     extract::DefaultBodyLimit,
@@ -13,7 +16,6 @@ use axum::{
     Router,
 };
 use codex_core::config::RefreshConfig;
-use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::ServeDir;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -38,11 +40,6 @@ async fn main() {
         oauth_sessions: Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
     };
 
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
-
     let api = Router::new()
         .route("/api/health", get(api::health))
         .route("/api/config", get(api::config))
@@ -51,6 +48,7 @@ async fn main() {
         .route("/api/convert", post(api::convert))
         .route("/api/convert/stream", post(api::convert_stream))
         .route("/api/transform", post(api::transform))
+        .route("/api/transform/zip", post(api::transform_zip))
         .route("/api/update", get(api::check_update))
         .route("/api/update/apply", post(api::apply_update))
         .route("/api/split", post(split::split))
@@ -73,8 +71,7 @@ async fn main() {
             post(sub2api::import_refresh_tokens),
         )
         .with_state(state)
-        .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_BYTES))
-        .layer(cors);
+        .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_BYTES));
 
     // Serve the built frontend (if present) as static files.
     let static_dir = std::env::var("STATIC_DIR").unwrap_or_else(|_| "frontend/dist".to_string());
@@ -84,11 +81,24 @@ async fn main() {
         .ok()
         .and_then(|p| p.parse().ok())
         .unwrap_or(8787);
-    let addr = SocketAddr::from(([0, 0, 0, 0], port));
+    let host = bind_host_from_env();
+    let addr = SocketAddr::from((host, port));
 
     tracing::info!("listening on http://{addr}");
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
+}
+
+/// Public Docker deployment needs to listen on all interfaces. Operators can
+/// still override this with `BIND_ADDR=127.0.0.1` for local-only runs.
+fn bind_host_from_env() -> IpAddr {
+    match std::env::var("BIND_ADDR") {
+        Ok(raw) => raw.parse().unwrap_or_else(|_| {
+            tracing::warn!("invalid BIND_ADDR={raw:?}; falling back to 0.0.0.0");
+            IpAddr::from([0, 0, 0, 0])
+        }),
+        Err(_) => IpAddr::from([0, 0, 0, 0]),
+    }
 }
 
 /// Build refresh config: start from defaults, layer the on-disk config file

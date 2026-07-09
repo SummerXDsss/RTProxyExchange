@@ -157,7 +157,7 @@ export function CpaUploadDialog({ open, onClose, files, onToast }: Props) {
                 checked={rememberKey}
                 onChange={(e) => setRememberKey(e.target.checked)}
               />
-              记住密钥(本地)
+              记住密钥（本机明文）
             </label>
           </Stack>
 
@@ -199,7 +199,7 @@ export function CpaUploadDialog({ open, onClose, files, onToast }: Props) {
           )}
 
           <Typography variant="caption" color="text.secondary">
-            密钥仅用于本次请求转发，不会被服务端记录或存储。
+            密钥仅用于本次请求转发，不会被服务端记录；勾选记住会保存到本机浏览器明文。
           </Typography>
         </Stack>
       </DialogContent>
