@@ -222,7 +222,7 @@ fn cpa_accounts_from_value(value: serde_json::Value) -> Result<Vec<CpaAccount>> 
 
             cpa_account_from_value(serde_json::Value::Object(obj)).map(|account| vec![account])
         }
-        _ => return Err(CoreError::JsonParse("unexpected CPA JSON shape".into())),
+        _ => Err(CoreError::JsonParse("unexpected CPA JSON shape".into())),
     }
 }
 
