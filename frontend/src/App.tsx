@@ -3,12 +3,18 @@ import {
   AppBar,
   Backdrop,
   Box,
+  Button,
   CircularProgress,
   Container,
   CssBaseline,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   IconButton,
   Paper,
   Snackbar,
+  Stack,
   Tab,
   Tabs,
   Toolbar,
@@ -21,7 +27,7 @@ import DarkModeIcon from "@mui/icons-material/DarkMode";
 import HistoryIcon from "@mui/icons-material/History";
 import LightModeIcon from "@mui/icons-material/LightMode";
 import TransformIcon from "@mui/icons-material/Transform";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { convert, convertStream, oauthExchange, oauthStart } from "./api";
 import { InputPanel, type Mode } from "./components/InputPanel";
 import { HistoryDrawer } from "./components/HistoryDrawer";
@@ -71,6 +77,8 @@ const SECTION_TABS: Record<MainSection, { value: AppTab; label: string }[]> = {
   tools: [{ value: "update", label: "检查更新" }],
 };
 
+const PRIVACY_NOTICE_KEY = "rtpx:privacy_notice:v1";
+
 export function App() {
   const { mode, toggle, theme } = useColorMode();
   const history = useHistory();
@@ -91,6 +99,7 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [privacyOpen, setPrivacyOpen] = useState(false);
 
   // CPA push dialog state.
   const [cpaOpen, setCpaOpen] = useState(false);
@@ -105,6 +114,23 @@ export function App() {
   const numOrUndef = (s: string): number | undefined => {
     const n = Number(s);
     return s.trim() && Number.isFinite(n) ? n : undefined;
+  };
+
+  useEffect(() => {
+    try {
+      setPrivacyOpen(localStorage.getItem(PRIVACY_NOTICE_KEY) !== "accepted");
+    } catch {
+      setPrivacyOpen(true);
+    }
+  }, []);
+
+  const acceptPrivacyNotice = () => {
+    try {
+      localStorage.setItem(PRIVACY_NOTICE_KEY, "accepted");
+    } catch {
+      // Still let the user continue when storage is blocked.
+    }
+    setPrivacyOpen(false);
   };
 
   /// Dry-run or single-token: use the simple non-streaming endpoint.
@@ -450,6 +476,33 @@ export function App() {
           files={cpaFiles}
           onToast={setToast}
         />
+
+        <Dialog open={privacyOpen} maxWidth="sm" fullWidth>
+          <DialogTitle>隐私与本地存储说明</DialogTitle>
+          <DialogContent>
+            <Stack spacing={1.5} sx={{ pt: 0.5 }}>
+              <Typography variant="body2">
+                本服务不会在服务端落盘保存你的 Refresh Token、Access Token、API Key 或管理密钥。
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                转换、刷新和上传请求会在处理时临时经过当前服务，并按你的操作转发到 OpenAI、Sub2API 或
+                CLIProxyAPI；请求完成后后端不持久化这些敏感内容。
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                历史记录、界面偏好、Sub2API/CLIProxyAPI 地址，以及你主动勾选“记住”的密钥，只会保存到当前浏览器的
+                localStorage，其中密钥是本机明文保存。
+              </Typography>
+              <Alert severity="warning" variant="outlined" sx={{ py: 0.5 }}>
+                如果这是公网实例，请只在信任的环境中使用，并避免在共享设备上勾选记住密钥。
+              </Alert>
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button variant="contained" onClick={acceptPrivacyNotice}>
+              我知道了
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         <Backdrop open={loading} sx={{ zIndex: (t) => t.zIndex.drawer + 1 }}>
           <CircularProgress color="primary" />
