@@ -44,7 +44,7 @@ pub fn looks_like_sub2api_export(value: &Value) -> bool {
     };
 
     let kind = value.get("type").and_then(Value::as_str);
-    if kind == Some("subdata") || value.get("proxies").is_some() {
+    if kind == Some("subdata") || kind == Some("sub2api-data") || value.get("proxies").is_some() {
         return true;
     }
 

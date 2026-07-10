@@ -35,16 +35,20 @@ interface Sub2apiCredentials {
   email: string | null;
   chatgpt_account_id: string | null;
   chatgpt_user_id: string | null;
+  organization_id: string | null;
   plan_type: string | null;
 }
 
 interface Sub2apiAccount {
   name: string | null;
+  auto_pause_on_expired: boolean;
   platform: string;
   type: string;
   credentials: Sub2apiCredentials;
+  extra: { email: string | null };
   concurrency: number;
   priority: number;
+  rate_multiplier: number;
 }
 
 export interface Sub2apiExport {
@@ -73,6 +77,7 @@ export function toCockpit(account: CodexAccount): CockpitAccount {
 function toSub2apiAccount(account: CodexAccount): Sub2apiAccount {
   return {
     name: account.email,
+    auto_pause_on_expired: true,
     platform: "openai",
     type: "oauth",
     credentials: {
@@ -83,10 +88,13 @@ function toSub2apiAccount(account: CodexAccount): Sub2apiAccount {
       email: account.email,
       chatgpt_account_id: account.account_id,
       chatgpt_user_id: account.user_id,
+      organization_id: account.organization_id,
       plan_type: account.plan_type,
     },
+    extra: { email: account.email },
     concurrency: DEFAULT_SUB2API_CONCURRENCY,
     priority: DEFAULT_SUB2API_PRIORITY,
+    rate_multiplier: 1,
   };
 }
 
@@ -96,7 +104,7 @@ export function toSub2apiExport(accounts: CodexAccount[]): Sub2apiExport {
     exported_at: new Date().toISOString(),
     proxies: [],
     accounts: accounts.map(toSub2apiAccount),
-    type: "subdata",
+    type: "sub2api-data",
     version: 1,
   };
 }

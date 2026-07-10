@@ -24,10 +24,12 @@
 //!       "credentials": { "access_token": "...", "expires_at": "...Z",
 //!         "refresh_token": "...", "id_token": "...", "email": "...",
 //!         "chatgpt_account_id": "...", "chatgpt_user_id": "...",
-//!         "plan_type": "plus" },
-//!       "concurrency": 0, "priority": 0
+//!         "organization_id": "...", "plan_type": "plus" },
+//!       "extra": { "email": "..." },
+//!       "auto_pause_on_expired": true,
+//!       "concurrency": 1, "priority": 50, "rate_multiplier": 1
 //!     }],
-//!     "type": "subdata", "version": 1
+//!     "type": "sub2api-data", "version": 1
 //!   }
 //!   ```
 //!
@@ -106,7 +108,16 @@ pub struct Sub2ApiCredentials {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chatgpt_user_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub organization_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plan_type: Option<String>,
+}
+
+/// Extra metadata block inside a Sub2API account.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Sub2ApiExtra {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
 }
 
 /// A single Sub2API account record.
@@ -116,16 +127,22 @@ pub struct Sub2ApiAccount {
     pub name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub email: Option<String>,
+    #[serde(default = "default_auto_pause_on_expired")]
+    pub auto_pause_on_expired: bool,
     #[serde(default = "default_platform")]
     pub platform: String,
     #[serde(rename = "type", default = "default_oauth_type")]
     pub kind: String,
     #[serde(default)]
     pub credentials: Sub2ApiCredentials,
+    #[serde(default)]
+    pub extra: Sub2ApiExtra,
     #[serde(default = "default_sub2api_concurrency")]
     pub concurrency: i64,
     #[serde(default = "default_sub2api_priority")]
     pub priority: i64,
+    #[serde(default = "default_rate_multiplier")]
+    pub rate_multiplier: i64,
 }
 
 fn default_platform() -> String {
@@ -134,17 +151,23 @@ fn default_platform() -> String {
 fn default_oauth_type() -> String {
     "oauth".to_string()
 }
-fn default_subdata_type() -> String {
-    "subdata".to_string()
+fn default_sub2api_data_type() -> String {
+    "sub2api-data".to_string()
 }
 fn default_version() -> i64 {
     1
+}
+fn default_auto_pause_on_expired() -> bool {
+    true
 }
 fn default_sub2api_concurrency() -> i64 {
     DEFAULT_SUB2API_CONCURRENCY
 }
 fn default_sub2api_priority() -> i64 {
     DEFAULT_SUB2API_PRIORITY
+}
+fn default_rate_multiplier() -> i64 {
+    1
 }
 
 /// A Sub2API export wrapper document.
@@ -154,7 +177,7 @@ pub struct Sub2ApiExport {
     #[serde(default)]
     pub proxies: Vec<serde_json::Value>,
     pub accounts: Vec<Sub2ApiAccount>,
-    #[serde(rename = "type", default = "default_subdata_type")]
+    #[serde(rename = "type", default = "default_sub2api_data_type")]
     pub kind: String,
     #[serde(default = "default_version")]
     pub version: i64,
@@ -167,7 +190,7 @@ impl Sub2ApiExport {
             exported_at: Utc::now().to_rfc3339(),
             proxies: Vec::new(),
             accounts,
-            kind: default_subdata_type(),
+            kind: default_sub2api_data_type(),
             version: default_version(),
         }
     }
@@ -248,7 +271,44 @@ fn cpa_account_from_value(value: serde_json::Value) -> Result<CpaAccount> {
         return Ok(codex_account_to_cpa(&account));
     }
 
-    serde_json::from_value(value).map_err(|e| CoreError::JsonParse(e.to_string()))
+    serde_json::from_value(normalize_cpa_aliases(value))
+        .map_err(|e| CoreError::JsonParse(e.to_string()))
+}
+
+fn normalize_cpa_aliases(mut value: serde_json::Value) -> serde_json::Value {
+    let serde_json::Value::Object(ref mut obj) = value else {
+        return value;
+    };
+
+    normalize_cpa_alias(obj, "account_id", &["chatgpt_account_id"]);
+    normalize_cpa_alias(obj, "expired", &["expires_at", "subscription_active_until"]);
+    value
+}
+
+fn normalize_cpa_alias(
+    obj: &mut serde_json::Map<String, serde_json::Value>,
+    canonical: &str,
+    aliases: &[&str],
+) {
+    if obj.contains_key(canonical) {
+        for alias in aliases {
+            obj.remove(*alias);
+        }
+        return;
+    }
+
+    let mut selected = None;
+    for alias in aliases {
+        if selected.is_none() {
+            selected = obj.remove(*alias);
+        } else {
+            obj.remove(*alias);
+        }
+    }
+
+    if let Some(value) = selected {
+        obj.insert(canonical.to_string(), value);
+    }
 }
 
 fn codex_account_to_cpa(account: &CodexAccount) -> CpaAccount {
@@ -293,6 +353,7 @@ pub fn cpa_to_sub2api_account(account: &CpaAccount) -> Sub2ApiAccount {
     let email = account.email.clone().or(claims.email);
     let chatgpt_account_id = account.account_id.clone().or(claims.account_id);
     let chatgpt_user_id = claims.user_id;
+    let organization_id = claims.organization_id;
     let plan_type = claims.plan_type;
 
     // Prefer the explicit cockpit `expired`; otherwise derive from the JWT exp.
@@ -304,7 +365,8 @@ pub fn cpa_to_sub2api_account(account: &CpaAccount) -> Sub2ApiAccount {
 
     Sub2ApiAccount {
         name: email.clone(),
-        email: email.clone(),
+        email: None,
+        auto_pause_on_expired: true,
         platform: "openai".to_string(),
         kind: "oauth".to_string(),
         credentials: Sub2ApiCredentials {
@@ -312,13 +374,18 @@ pub fn cpa_to_sub2api_account(account: &CpaAccount) -> Sub2ApiAccount {
             expires_at,
             refresh_token: account.refresh_token.clone(),
             id_token: account.id_token.clone(),
-            email,
+            email: email.clone(),
             chatgpt_account_id,
             chatgpt_user_id,
+            organization_id,
             plan_type,
+        },
+        extra: Sub2ApiExtra {
+            email: email.clone(),
         },
         concurrency: DEFAULT_SUB2API_CONCURRENCY,
         priority: DEFAULT_SUB2API_PRIORITY,
+        rate_multiplier: 1,
     }
 }
 
@@ -349,6 +416,7 @@ pub fn sub2api_account_to_cpa(account: &Sub2ApiAccount) -> CpaAccount {
         email: creds
             .email
             .clone()
+            .or_else(|| account.extra.email.clone())
             .or_else(|| account.email.clone())
             .or_else(|| account.name.clone()),
         kind: "codex".to_string(),

@@ -250,7 +250,7 @@ fn sub2api_to_cpa_maps_fields() {
             "concurrency": 0,
             "priority": 0
         }],
-        "type": "subdata",
+        "type": "sub2api-data",
         "version": 1
     });
 
@@ -310,12 +310,13 @@ fn cpa_to_sub2api_maps_fields() {
 
     let export = cpa_json_to_sub2api(&cpa.to_string()).unwrap();
     assert_eq!(export.accounts.len(), 1);
-    assert_eq!(export.kind, "subdata");
+    assert_eq!(export.kind, "sub2api-data");
     assert_eq!(export.version, 1);
     let a = &export.accounts[0];
     assert_eq!(a.platform, "openai");
     assert_eq!(a.kind, "oauth");
     assert_eq!(a.name.as_deref(), Some("u@example.com"));
+    assert!(a.auto_pause_on_expired);
     assert_eq!(a.credentials.refresh_token, "rt_abc");
     assert_eq!(
         a.credentials.chatgpt_account_id.as_deref(),
@@ -325,8 +326,10 @@ fn cpa_to_sub2api_maps_fields() {
         a.credentials.expires_at.as_deref(),
         Some("2026-06-06T05:28:57.000Z")
     );
+    assert_eq!(a.extra.email.as_deref(), Some("u@example.com"));
     assert_eq!(a.concurrency, crate::transform::DEFAULT_SUB2API_CONCURRENCY);
     assert_eq!(a.priority, crate::transform::DEFAULT_SUB2API_PRIORITY);
+    assert_eq!(a.rate_multiplier, 1);
 }
 
 #[test]
@@ -418,6 +421,26 @@ fn parse_cpa_accepts_object_array_and_sub2api() {
 }
 
 #[test]
+fn parse_cpa_accepts_duplicate_alias_fields() {
+    use crate::transform::parse_cpa_accounts;
+
+    let input = r#"{
+        "refresh_token": "rt_abc",
+        "email": "u@example.com",
+        "account_id": "account-main",
+        "chatgpt_account_id": "account-alias",
+        "expired": "2026-06-01T00:00:00Z",
+        "expires_at": "2026-07-01T00:00:00Z",
+        "subscription_active_until": "2026-08-01T00:00:00Z"
+    }"#;
+
+    let accounts = parse_cpa_accounts(input).unwrap();
+    assert_eq!(accounts.len(), 1);
+    assert_eq!(accounts[0].account_id.as_deref(), Some("account-main"));
+    assert_eq!(accounts[0].expired.as_deref(), Some("2026-06-01T00:00:00Z"));
+}
+
+#[test]
 fn split_accounts_names_and_dual_format() {
     use crate::transform::split_accounts;
 
@@ -434,7 +457,7 @@ fn split_accounts_names_and_dual_format() {
     assert_eq!(a0.filename_base, "codex_alice@example.com");
     assert_eq!(a0.cpa.refresh_token, "r1");
     assert_eq!(a0.sub2api.accounts.len(), 1);
-    assert_eq!(a0.sub2api.kind, "subdata");
+    assert_eq!(a0.sub2api.kind, "sub2api-data");
 
     // '+' is sanitized to '_'.
     let a1 = &result.accounts[1];

@@ -35,9 +35,11 @@ import type { Sub2ApiGroup, Sub2ApiImportResponse } from "../types";
 const LS_BASE = "rtpx:sub2api:base_url";
 const LS_KEY = "rtpx:sub2api:admin_key";
 const LS_MODE = "rtpx:sub2api:import_mode";
+const LS_AUTH_MODE = "rtpx:sub2api:auth_mode";
 const RESULT_DISPLAY_LIMIT = 300;
 
 type ImportMode = "at" | "api_key" | "rt";
+type AuthMode = "key" | "login";
 
 const AT_SAMPLE = `[
   {
@@ -96,6 +98,7 @@ function normalizeUploadedText(text: string): string {
 
 export function Sub2ApiAtImportPanel({ onToast }: { onToast: (message: string) => void }) {
   const [importMode, setImportMode] = useState<ImportMode>("at");
+  const [authMode, setAuthMode] = useState<AuthMode>("key");
   const [baseUrl, setBaseUrl] = useState("");
   const [adminKey, setAdminKey] = useState("");
   const [loginEmail, setLoginEmail] = useState("");
@@ -120,6 +123,8 @@ export function Sub2ApiAtImportPanel({ onToast }: { onToast: (message: string) =
     setBaseUrl(localStorage.getItem(LS_BASE) ?? "");
     const savedMode = localStorage.getItem(LS_MODE);
     if (savedMode === "at" || savedMode === "api_key" || savedMode === "rt") setImportMode(savedMode);
+    const savedAuthMode = localStorage.getItem(LS_AUTH_MODE);
+    if (savedAuthMode === "key" || savedAuthMode === "login") setAuthMode(savedAuthMode);
     const savedKey = localStorage.getItem(LS_KEY);
     if (savedKey) {
       setAdminKey(savedKey);
@@ -130,11 +135,12 @@ export function Sub2ApiAtImportPanel({ onToast }: { onToast: (message: string) =
   const persist = () => {
     localStorage.setItem(LS_BASE, baseUrl.trim());
     localStorage.setItem(LS_MODE, importMode);
-    if (rememberKey) localStorage.setItem(LS_KEY, adminKey);
+    localStorage.setItem(LS_AUTH_MODE, authMode);
+    if (authMode === "key" && rememberKey) localStorage.setItem(LS_KEY, adminKey);
     else localStorage.removeItem(LS_KEY);
   };
 
-  const authCredential = loginToken || adminKey;
+  const authCredential = authMode === "login" ? loginToken : adminKey;
 
   const numberOrUndefined = (value: string): number | undefined => {
     const n = Number(value);
@@ -280,8 +286,26 @@ export function Sub2ApiAtImportPanel({ onToast }: { onToast: (message: string) =
           size="small"
           slotProps={{ input: { startAdornment: <LinkIcon fontSize="small" sx={{ mr: 1, opacity: 0.6 }} /> } }}
         />
+      </Stack>
+
+      <ToggleButtonGroup
+        size="small"
+        exclusive
+        value={authMode}
+        onChange={(_, value: AuthMode | null) => {
+          if (!value) return;
+          setAuthMode(value);
+          setError(null);
+          setTested(null);
+        }}
+      >
+        <ToggleButton value="key">Admin Key</ToggleButton>
+        <ToggleButton value="login">管理员登录</ToggleButton>
+      </ToggleButtonGroup>
+
+      {authMode === "key" ? (
         <TextField
-          label="Admin API Key / 登录 JWT"
+          label="Admin API Key"
           type="password"
           value={adminKey}
           onChange={(e) => setAdminKey(e.target.value)}
@@ -289,36 +313,36 @@ export function Sub2ApiAtImportPanel({ onToast }: { onToast: (message: string) =
           size="small"
           autoComplete="off"
         />
-      </Stack>
-
-      <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
-        <TextField
-          label="Sub2API 管理员邮箱"
-          value={loginEmail}
-          onChange={(e) => setLoginEmail(e.target.value)}
-          fullWidth
-          size="small"
-          autoComplete="username"
-        />
-        <TextField
-          label="Sub2API 密码"
-          type="password"
-          value={loginPassword}
-          onChange={(e) => setLoginPassword(e.target.value)}
-          fullWidth
-          size="small"
-          autoComplete="current-password"
-        />
-        <Button
-          variant="outlined"
-          onClick={handleLogin}
-          disabled={loggingIn || !baseUrl.trim() || !loginEmail.trim() || !loginPassword}
-          startIcon={loggingIn ? <CircularProgress size={14} /> : undefined}
-          sx={{ minWidth: 120 }}
-        >
-          登录
-        </Button>
-      </Stack>
+      ) : (
+        <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
+          <TextField
+            label="Sub2API 管理员邮箱"
+            value={loginEmail}
+            onChange={(e) => setLoginEmail(e.target.value)}
+            fullWidth
+            size="small"
+            autoComplete="username"
+          />
+          <TextField
+            label="Sub2API 密码"
+            type="password"
+            value={loginPassword}
+            onChange={(e) => setLoginPassword(e.target.value)}
+            fullWidth
+            size="small"
+            autoComplete="current-password"
+          />
+          <Button
+            variant="outlined"
+            onClick={handleLogin}
+            disabled={loggingIn || !baseUrl.trim() || !loginEmail.trim() || !loginPassword}
+            startIcon={loggingIn ? <CircularProgress size={14} /> : undefined}
+            sx={{ minWidth: 120 }}
+          >
+            登录
+          </Button>
+        </Stack>
+      )}
 
       <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
         <input ref={fileRef} type="file" accept=".txt,.json" multiple hidden onChange={handleFiles} />
@@ -340,14 +364,20 @@ export function Sub2ApiAtImportPanel({ onToast }: { onToast: (message: string) =
         </Button>
         {loadingGroups && <CircularProgress size={16} />}
         {tested && <Chip size="small" color="success" label={tested} />}
-        <label style={{ marginLeft: "auto", fontSize: 13, display: "flex", alignItems: "center", gap: 4 }}>
-          <input
-            type="checkbox"
-            checked={rememberKey}
-            onChange={(e) => setRememberKey(e.target.checked)}
-          />
-          记住密钥/JWT（本机明文）
-        </label>
+        {authMode === "key" ? (
+          <label style={{ marginLeft: "auto", fontSize: 13, display: "flex", alignItems: "center", gap: 4 }}>
+            <input
+              type="checkbox"
+              checked={rememberKey}
+              onChange={(e) => setRememberKey(e.target.checked)}
+            />
+            记住 Key（本机明文）
+          </label>
+        ) : (
+          <Typography variant="caption" color="text.secondary" sx={{ ml: "auto" }}>
+            JWT 仅当前页面内存保存
+          </Typography>
+        )}
       </Stack>
 
       <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
@@ -425,7 +455,7 @@ export function Sub2ApiAtImportPanel({ onToast }: { onToast: (message: string) =
           一键导入 Sub2API
         </Button>
         <Typography variant="caption" color="text.secondary">
-          Admin Key 只用于本次请求转发，不会服务端存储；勾选记住会保存到本机浏览器明文。
+          Sub2API 请求由浏览器直连目标服务，不经过本项目后端；目标服务需允许 CORS。
         </Typography>
       </Stack>
 

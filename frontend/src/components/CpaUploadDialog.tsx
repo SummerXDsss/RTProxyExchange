@@ -42,7 +42,7 @@ const LS_KEY = "rtpx:cpa:mgmt_key";
 const RESULT_DISPLAY_LIMIT = 200;
 
 /// Dialog to push CPA account files directly into a CLIProxyAPI instance via
-/// its Management API (proxied through our backend to avoid CORS/mixed-content).
+/// its Management API from the browser.
 export function CpaUploadDialog({ open, onClose, files, onToast }: Props) {
   const [baseUrl, setBaseUrl] = useState("");
   const [mgmtKey, setMgmtKey] = useState("");
@@ -119,7 +119,7 @@ export function CpaUploadDialog({ open, onClose, files, onToast }: Props) {
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 0.5 }}>
           <Alert severity="info" variant="outlined" sx={{ py: 0.5 }}>
-            通过 CLIProxyAPI 管理接口批量导入 {files.length} 个 CPA 账号。
+            浏览器直连 CLIProxyAPI 管理接口批量导入 {files.length} 个 CPA 账号，不经过本项目后端。
             需在 CLIProxyAPI 配置中开启远程管理并设置管理密钥。
           </Alert>
 
@@ -199,7 +199,7 @@ export function CpaUploadDialog({ open, onClose, files, onToast }: Props) {
           )}
 
           <Typography variant="caption" color="text.secondary">
-            密钥仅用于本次请求转发，不会被服务端记录；勾选记住会保存到本机浏览器明文。
+            目标 CLIProxyAPI 需允许 CORS；勾选记住会把管理密钥保存到本机浏览器明文。
           </Typography>
         </Stack>
       </DialogContent>
