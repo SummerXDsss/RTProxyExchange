@@ -16,7 +16,7 @@ use axum::{
     Router,
 };
 use codex_core::config::RefreshConfig;
-use tower_http::{cors::CorsLayer, services::ServeDir};
+use tower_http::services::ServeDir;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use api::AppState;
@@ -71,8 +71,7 @@ async fn main() {
             post(sub2api::import_refresh_tokens),
         )
         .with_state(state)
-        .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_BYTES))
-        .layer(CorsLayer::permissive());
+        .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_BYTES));
 
     // Serve the built frontend (if present) as static files.
     let static_dir = std::env::var("STATIC_DIR").unwrap_or_else(|_| "frontend/dist".to_string());

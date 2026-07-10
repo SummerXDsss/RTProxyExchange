@@ -750,11 +750,14 @@ fn build_access_token_account(
 
     let payload = json!({
         "name": name,
+        "auto_pause_on_expired": true,
         "platform": "openai",
         "type": "oauth",
         "credentials": Value::Object(credentials),
+        "extra": { "email": email },
         "concurrency": options.concurrency,
         "priority": options.priority,
+        "rate_multiplier": 1,
         "confirm_mixed_channel_risk": true,
     });
 
@@ -774,6 +777,7 @@ fn build_api_key_account(
     let name = format!("openai-apikey-{}", mask_secret_tail(api_key, index + 1));
     let payload = json!({
         "name": name,
+        "auto_pause_on_expired": true,
         "platform": "openai",
         "type": "apikey",
         "credentials": {
@@ -781,6 +785,7 @@ fn build_api_key_account(
         },
         "concurrency": options.concurrency,
         "priority": options.priority,
+        "rate_multiplier": 1,
         "confirm_mixed_channel_risk": true,
     });
 
@@ -840,11 +845,14 @@ fn build_refreshed_account(
 
     let payload = json!({
         "name": name,
+        "auto_pause_on_expired": true,
         "platform": "openai",
         "type": "oauth",
         "credentials": Value::Object(credentials),
+        "extra": { "email": account.email },
         "concurrency": options.concurrency,
         "priority": options.priority,
+        "rate_multiplier": 1,
         "confirm_mixed_channel_risk": true,
     });
 
@@ -1092,6 +1100,11 @@ mod tests {
 
         assert_eq!(account.payload["concurrency"].as_i64(), Some(8));
         assert_eq!(account.payload["priority"].as_i64(), Some(66));
+        assert_eq!(
+            account.payload["auto_pause_on_expired"].as_bool(),
+            Some(true)
+        );
+        assert_eq!(account.payload["rate_multiplier"].as_i64(), Some(1));
     }
 
     #[test]

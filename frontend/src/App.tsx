@@ -485,8 +485,8 @@ export function App() {
                 本服务不会在服务端落盘保存你的 Refresh Token、Access Token、API Key 或管理密钥。
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                CPA/Sub2API 的测试、登录、拉分组和上传由浏览器直连目标服务，不经过本项目后端。
-                Refresh Token 刷新仍会在处理时临时经过当前服务，请求完成后后端不持久化这些敏感内容。
+                转换、刷新和上传请求会在处理时临时经过当前服务，并按你的操作转发到 OpenAI、Sub2API 或
+                CLIProxyAPI；请求完成后后端不持久化这些敏感内容。
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 历史记录、界面偏好、Sub2API/CLIProxyAPI 地址，以及你主动勾选“记住”的密钥，只会保存到当前浏览器的
