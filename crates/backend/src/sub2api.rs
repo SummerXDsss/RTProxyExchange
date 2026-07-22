@@ -1,8 +1,8 @@
 //! Direct import into a user-provided Sub2API instance.
 //!
-//! The browser sends credential JSON to this backend. We extract access tokens
-//! or OpenAI API keys, build Sub2API account payloads, and forward them to
-//! Sub2API's admin API with the transient Admin API key supplied by the user.
+//! The browser sends credential JSON to this backend. We can forward complete
+//! Sub2API account records or build records from access tokens, API keys and
+//! refreshed tokens, then upload them with the transient admin credential.
 
 use std::time::Duration;
 
@@ -341,6 +341,63 @@ pub async fn import_access_tokens(
     }
 }
 
+pub async fn import_accounts(Json(req): Json<Sub2ApiImportRequest>) -> axum::response::Response {
+    let base = match normalize_base(&req.base_url) {
+        Ok(b) => b,
+        Err(e) => return err_json(StatusCode::BAD_REQUEST, e),
+    };
+    if req.admin_key.trim().is_empty() {
+        return err_json(StatusCode::BAD_REQUEST, "Admin API Key / JWT 不能为空");
+    }
+
+    let accounts =
+        match extract_sub2api_account_drafts(&req.input, Sub2ApiAccountOptions::from_request(&req))
+        {
+            Ok(accounts) => accounts,
+            Err(e) => return err_json(StatusCode::BAD_REQUEST, e),
+        };
+    if accounts.is_empty() {
+        return err_json(
+            StatusCode::BAD_REQUEST,
+            "没有找到 Sub2API 账号，支持 accounts 或 items[].content.accounts 结构",
+        );
+    }
+
+    let client = match sub2api_client() {
+        Ok(c) => c,
+        Err(e) => return err_json(StatusCode::INTERNAL_SERVER_ERROR, e),
+    };
+
+    match upload_batch(
+        &client,
+        &base,
+        req.admin_key.trim(),
+        &accounts,
+        &req.group_ids,
+    )
+    .await
+    {
+        Ok(mut results) => {
+            if results.len() != accounts.len() {
+                results = success_results(&accounts);
+            }
+            let success = results.iter().filter(|r| r.ok).count();
+            let failed = results.len() - success;
+            (
+                StatusCode::OK,
+                Json(Sub2ApiImportResponse {
+                    total: results.len(),
+                    success,
+                    failed,
+                    results,
+                }),
+            )
+                .into_response()
+        }
+        Err(e) => err_json(StatusCode::BAD_GATEWAY, e),
+    }
+}
+
 pub async fn import_api_keys(Json(req): Json<Sub2ApiImportRequest>) -> axum::response::Response {
     let base = match normalize_base(&req.base_url) {
         Ok(b) => b,
@@ -537,6 +594,179 @@ fn add_sub2api_auth(builder: reqwest::RequestBuilder, credential: &str) -> reqwe
 
 fn err_json(status: StatusCode, message: impl Into<String>) -> axum::response::Response {
     (status, Json(json!({ "error": message.into() }))).into_response()
+}
+
+fn extract_sub2api_account_drafts(
+    input: &str,
+    options: Sub2ApiAccountOptions,
+) -> Result<Vec<Sub2ApiAccountDraft>, String> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return Err("Sub2API 账号 JSON 不能为空".into());
+    }
+
+    let mut account_values = Vec::new();
+    if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
+        collect_sub2api_account_values(&value, &mut account_values);
+    } else {
+        let stream = serde_json::Deserializer::from_str(trimmed).into_iter::<Value>();
+        for value in stream {
+            let value = value.map_err(|e| format!("Sub2API 账号 JSON 解析失败: {e}"))?;
+            collect_sub2api_account_values(&value, &mut account_values);
+        }
+    }
+
+    account_values
+        .into_iter()
+        .enumerate()
+        .map(|(index, value)| build_imported_account(index, value, options))
+        .collect()
+}
+
+fn collect_sub2api_account_values(value: &Value, out: &mut Vec<Value>) {
+    if looks_like_sub2api_account(value) {
+        out.push(value.clone());
+        return;
+    }
+
+    match value {
+        Value::Array(items) => {
+            for item in items {
+                collect_sub2api_account_values(item, out);
+            }
+        }
+        Value::Object(obj) => {
+            if let Some(accounts) = obj.get("accounts").and_then(Value::as_array) {
+                for account in accounts {
+                    collect_sub2api_account_values(account, out);
+                }
+            }
+            if let Some(items) = obj.get("items").and_then(Value::as_array) {
+                for item in items {
+                    collect_sub2api_account_values(item.get("content").unwrap_or(item), out);
+                }
+            }
+            if let Some(content) = obj.get("content") {
+                collect_sub2api_content(content, out);
+            }
+        }
+        Value::String(_) => collect_sub2api_content(value, out),
+        _ => {}
+    }
+}
+
+fn collect_sub2api_content(content: &Value, out: &mut Vec<Value>) {
+    match content {
+        Value::String(text) => {
+            if let Ok(value) = serde_json::from_str::<Value>(text) {
+                collect_sub2api_account_values(&value, out);
+            }
+        }
+        value => collect_sub2api_account_values(value, out),
+    }
+}
+
+fn looks_like_sub2api_account(value: &Value) -> bool {
+    value
+        .get("credentials")
+        .and_then(Value::as_object)
+        .is_some()
+}
+
+fn build_imported_account(
+    index: usize,
+    value: Value,
+    options: Sub2ApiAccountOptions,
+) -> Result<Sub2ApiAccountDraft, String> {
+    let Value::Object(mut payload) = value else {
+        return Err(format!("第 {} 个 Sub2API 账号不是 JSON 对象", index + 1));
+    };
+    let credentials = payload
+        .get("credentials")
+        .and_then(Value::as_object)
+        .ok_or_else(|| format!("第 {} 个 Sub2API 账号缺少 credentials", index + 1))?;
+
+    let email = credentials
+        .get("email")
+        .and_then(Value::as_str)
+        .or_else(|| {
+            payload
+                .get("extra")
+                .and_then(Value::as_object)
+                .and_then(|extra| extra.get("email"))
+                .and_then(Value::as_str)
+        })
+        .or_else(|| payload.get("email").and_then(Value::as_str))
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+    let expires_at = credentials
+        .get("expires_at")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+    let fallback_id = credentials
+        .get("agent_runtime_id")
+        .or_else(|| credentials.get("chatgpt_account_id"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let name = payload
+        .get("name")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .or_else(|| email.clone())
+        .or_else(|| fallback_id.map(str::to_string))
+        .unwrap_or_else(|| format!("sub2api-account-{}", index + 1));
+    let inferred_kind = if credentials.get("api_key").is_some() {
+        "apikey"
+    } else {
+        "oauth"
+    };
+
+    payload.insert("name".into(), Value::String(name.clone()));
+    payload
+        .entry("platform")
+        .or_insert_with(|| Value::String("openai".into()));
+    payload
+        .entry("type")
+        .or_insert_with(|| Value::String(inferred_kind.into()));
+    payload
+        .entry("auto_pause_on_expired")
+        .or_insert(Value::Bool(true));
+    payload
+        .entry("concurrency")
+        .or_insert(json!(options.concurrency));
+    payload.entry("priority").or_insert(json!(options.priority));
+    payload.entry("rate_multiplier").or_insert(json!(1));
+    payload
+        .entry("confirm_mixed_channel_risk")
+        .or_insert(Value::Bool(true));
+
+    if let Some(email) = &email {
+        match payload.entry("extra") {
+            serde_json::map::Entry::Vacant(entry) => {
+                entry.insert(json!({ "email": email }));
+            }
+            serde_json::map::Entry::Occupied(mut entry) => {
+                if let Some(extra) = entry.get_mut().as_object_mut() {
+                    extra
+                        .entry("email")
+                        .or_insert_with(|| Value::String(email.clone()));
+                }
+            }
+        }
+    }
+
+    Ok(Sub2ApiAccountDraft {
+        name,
+        email,
+        expires_at,
+        payload: Value::Object(payload),
+    })
 }
 
 fn extract_access_tokens(input: &str) -> Result<Vec<String>, String> {
@@ -1070,6 +1300,87 @@ mod tests {
                 "sess-test-abcdefghijklmnopqrstuvwxyz"
             ]
         );
+    }
+
+    #[test]
+    fn extracts_wrapped_sub2api_account_bundle() {
+        let input = r#"{
+          "generatedAt": "2026-07-22T18:15:43.703Z",
+          "items": [{
+            "fileName": "user@example.com.json",
+            "encoding": "json",
+            "content": {
+              "accounts": [{
+                "name": "user@example.com",
+                "platform": "openai",
+                "type": "oauth",
+                "credentials": {
+                  "auth_mode": "agentIdentity",
+                  "agent_private_key": "private-key",
+                  "agent_runtime_id": "agent-runtime",
+                  "email": "user@example.com"
+                },
+                "concurrency": 10,
+                "priority": 1
+              }]
+            }
+          }]
+        }"#;
+
+        let accounts = extract_sub2api_account_drafts(
+            input,
+            Sub2ApiAccountOptions {
+                concurrency: 3,
+                priority: 50,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(accounts.len(), 1);
+        assert_eq!(accounts[0].name, "user@example.com");
+        assert_eq!(accounts[0].email.as_deref(), Some("user@example.com"));
+        assert_eq!(accounts[0].payload["concurrency"].as_i64(), Some(10));
+        assert_eq!(accounts[0].payload["priority"].as_i64(), Some(1));
+        assert_eq!(
+            accounts[0].payload["credentials"]["agent_private_key"].as_str(),
+            Some("private-key")
+        );
+        assert_eq!(
+            accounts[0].payload["credentials"]["auth_mode"].as_str(),
+            Some("agentIdentity")
+        );
+        assert_eq!(
+            accounts[0].payload["confirm_mixed_channel_risk"].as_bool(),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn extracts_direct_sub2api_export_and_fills_defaults() {
+        let input = r#"{
+          "type": "sub2api-data",
+          "version": 1,
+          "accounts": [{
+            "credentials": {
+              "api_key": "sk-test-abcdefghijklmnopqrstuvwxyz"
+            }
+          }]
+        }"#;
+
+        let accounts = extract_sub2api_account_drafts(
+            input,
+            Sub2ApiAccountOptions {
+                concurrency: 8,
+                priority: 66,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(accounts.len(), 1);
+        assert_eq!(accounts[0].payload["platform"].as_str(), Some("openai"));
+        assert_eq!(accounts[0].payload["type"].as_str(), Some("apikey"));
+        assert_eq!(accounts[0].payload["concurrency"].as_i64(), Some(8));
+        assert_eq!(accounts[0].payload["priority"].as_i64(), Some(66));
     }
 
     #[test]

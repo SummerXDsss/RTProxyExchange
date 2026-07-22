@@ -68,7 +68,7 @@ function saveBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-/// Offline format converter UI (CPA <-> Sub2API). Pure transform, no refresh.
+/// Format converter UI (CPA <-> Sub2API). No token refresh or target upload.
 export function TransformPanel({ onToast }: Props) {
   const [direction, setDirection] = useState<TransformDirection>("sub2api_to_cpa");
   const [input, setInput] = useState("");
@@ -78,8 +78,12 @@ export function TransformPanel({ onToast }: Props) {
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const sourceLabel = direction === "sub2api_to_cpa" ? "Sub2API" : "CPA";
-  const targetLabel = direction === "sub2api_to_cpa" ? "CPA" : "Sub2API";
+  const sourceLabel = direction === "sub2api_to_cpa"
+    ? "Sub2API 导出包"
+    : "CPA 单账号文件或数组";
+  const targetLabel = direction === "sub2api_to_cpa"
+    ? "CPA 账号数组"
+    : "Sub2API 导出包";
   const sample = direction === "sub2api_to_cpa" ? SUB2API_SAMPLE : CPA_SAMPLE;
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -155,7 +159,7 @@ export function TransformPanel({ onToast }: Props) {
       <Stack spacing={2}>
         <Stack direction="row" spacing={1.5} alignItems="center">
           <SwapHorizIcon color="primary" />
-          <Typography variant="subtitle1">离线格式转换</Typography>
+          <Typography variant="subtitle1">Sub2API 与 CPA 格式互转</Typography>
         </Stack>
 
         <ToggleButtonGroup
@@ -166,12 +170,12 @@ export function TransformPanel({ onToast }: Props) {
           onChange={(_, v) => v && setDirection(v)}
           fullWidth
         >
-          <ToggleButton value="sub2api_to_cpa">Sub2API → CPA</ToggleButton>
-          <ToggleButton value="cpa_to_sub2api">CPA → Sub2API</ToggleButton>
+          <ToggleButton value="sub2api_to_cpa">Sub2API 导出包 → CPA 文件</ToggleButton>
+          <ToggleButton value="cpa_to_sub2api">CPA 文件 → Sub2API 导出包</ToggleButton>
         </ToggleButtonGroup>
 
         <Alert severity="info" variant="outlined" sx={{ py: 0.5 }}>
-          纯本地格式转换，不会刷新 Token，也不发起任何登录请求。
+          这里只转换 JSON 格式，不刷新 Token，也不会连接你的 Sub2API 或 CLIProxyAPI。
         </Alert>
 
         {error && (

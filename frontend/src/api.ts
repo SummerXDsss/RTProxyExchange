@@ -207,6 +207,30 @@ export async function sub2apiGroups(
   return body.groups ?? [];
 }
 
+/// Import complete Sub2API account records without rewriting their credentials.
+export async function sub2apiImportAccounts(
+  baseUrl: string,
+  adminKey: string,
+  input: string,
+  groupIds: number[] = [],
+  options: { accountConcurrency?: number; priority?: number } = {},
+): Promise<Sub2ApiImportResponse> {
+  const resp = await fetch("/api/sub2api/import-accounts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      base_url: baseUrl,
+      admin_key: adminKey,
+      input,
+      group_ids: groupIds,
+      account_concurrency: options.accountConcurrency,
+      priority: options.priority,
+    }),
+  });
+  if (!resp.ok) throw new Error(await errorMessage(resp));
+  return resp.json();
+}
+
 /// Extract access_token values from AT-only JSON and create Sub2API OpenAI OAuth accounts.
 export async function sub2apiImportAt(
   baseUrl: string,

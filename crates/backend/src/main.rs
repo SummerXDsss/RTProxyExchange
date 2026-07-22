@@ -59,6 +59,10 @@ async fn main() {
         .route("/api/sub2api/groups", post(sub2api::list_groups))
         .route("/api/sub2api/test", post(sub2api::test_connection))
         .route(
+            "/api/sub2api/import-accounts",
+            post(sub2api::import_accounts),
+        )
+        .route(
             "/api/sub2api/import-at",
             post(sub2api::import_access_tokens),
         )

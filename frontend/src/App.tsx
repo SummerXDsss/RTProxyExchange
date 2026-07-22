@@ -52,26 +52,22 @@ import {
   type OutputFormat,
 } from "./formats";
 
-type MainSection = "sub2api" | "cliproxyapi" | "tools";
+type MainSection = "sub2api" | "cliproxyapi" | "formats" | "tools";
 type AppTab = "sub2api_import" | "convert" | "format" | "split" | "free" | "update";
 
 const SECTION_DEFAULT_TAB: Record<MainSection, AppTab> = {
   sub2api: "sub2api_import",
   cliproxyapi: "convert",
+  formats: "format",
   tools: "update",
 };
 
 const SECTION_TABS: Record<MainSection, { value: AppTab; label: string }[]> = {
-  sub2api: [
-    { value: "sub2api_import", label: "Sub2API 导入" },
-    { value: "format", label: "Sub / CPA 互转" },
-    { value: "split", label: "账号拆分" },
-    { value: "free", label: "Free 号转换" },
-  ],
-  cliproxyapi: [
-    { value: "convert", label: "转换 / 登录" },
-    { value: "format", label: "Sub / CPA 互转" },
-    { value: "split", label: "账号拆分" },
+  sub2api: [{ value: "sub2api_import", label: "账号导入" }],
+  cliproxyapi: [{ value: "convert", label: "RT 登录与账号转换" }],
+  formats: [
+    { value: "format", label: "Sub2API / CPA 互转" },
+    { value: "split", label: "账号拆分与打包" },
     { value: "free", label: "Free 号转换" },
   ],
   tools: [{ value: "update", label: "检查更新" }],
@@ -348,7 +344,7 @@ export function App() {
               RTProxyExchange
             </Typography>
             <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
-              Refresh Token → CLIProxyAPI
+              OpenAI 账号转换与导入
             </Typography>
             <Tooltip title="历史记录">
               <IconButton onClick={() => setHistoryOpen(true)}>
@@ -370,13 +366,24 @@ export function App() {
               setSection(v);
               setTab(SECTION_DEFAULT_TAB[v]);
             }}
+            variant="scrollable"
+            scrollButtons="auto"
+            allowScrollButtonsMobile
             sx={{ mb: 1 }}
           >
-            <Tab value="sub2api" label="Sub2API 类" />
-            <Tab value="cliproxyapi" label="CLIProxyAPI 类" />
-            <Tab value="tools" label="工具" />
+            <Tab value="sub2api" label="Sub2API" />
+            <Tab value="cliproxyapi" label="CLIProxyAPI (CPA)" />
+            <Tab value="formats" label="格式工具" />
+            <Tab value="tools" label="系统" />
           </Tabs>
-          <Tabs value={tab} onChange={(_, v: AppTab) => setTab(v)} sx={{ mb: 2 }}>
+          <Tabs
+            value={tab}
+            onChange={(_, v: AppTab) => setTab(v)}
+            variant="scrollable"
+            scrollButtons="auto"
+            allowScrollButtonsMobile
+            sx={{ mb: 2 }}
+          >
             {SECTION_TABS[section].map((item) => (
               <Tab key={item.value} value={item.value} label={item.label} />
             ))}

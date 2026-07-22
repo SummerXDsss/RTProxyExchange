@@ -24,6 +24,7 @@ import UploadFileIcon from "@mui/icons-material/UploadFile";
 import { useEffect, useRef, useState } from "react";
 import {
   sub2apiGroups,
+  sub2apiImportAccounts,
   sub2apiImportApiKeys,
   sub2apiImportAt,
   sub2apiImportRefreshTokens,
@@ -38,8 +39,27 @@ const LS_MODE = "rtpx:sub2api:import_mode";
 const LS_AUTH_MODE = "rtpx:sub2api:auth_mode";
 const RESULT_DISPLAY_LIMIT = 300;
 
-type ImportMode = "at" | "api_key" | "rt";
+type ImportMode = "account" | "at" | "api_key" | "rt";
 type AuthMode = "key" | "login";
+
+const ACCOUNT_SAMPLE = `{
+  "type": "sub2api-data",
+  "accounts": [
+    {
+      "name": "user@example.com",
+      "platform": "openai",
+      "type": "oauth",
+      "credentials": {
+        "auth_mode": "agentIdentity",
+        "agent_private_key": "...",
+        "agent_runtime_id": "agent-...",
+        "email": "user@example.com"
+      }
+    }
+  ]
+}
+
+也支持批处理包装：items[].content.accounts`;
 
 const AT_SAMPLE = `[
   {
@@ -97,7 +117,7 @@ function normalizeUploadedText(text: string): string {
 }
 
 export function Sub2ApiAtImportPanel({ onToast }: { onToast: (message: string) => void }) {
-  const [importMode, setImportMode] = useState<ImportMode>("at");
+  const [importMode, setImportMode] = useState<ImportMode>("account");
   const [authMode, setAuthMode] = useState<AuthMode>("key");
   const [baseUrl, setBaseUrl] = useState("");
   const [adminKey, setAdminKey] = useState("");
@@ -122,7 +142,14 @@ export function Sub2ApiAtImportPanel({ onToast }: { onToast: (message: string) =
   useEffect(() => {
     setBaseUrl(localStorage.getItem(LS_BASE) ?? "");
     const savedMode = localStorage.getItem(LS_MODE);
-    if (savedMode === "at" || savedMode === "api_key" || savedMode === "rt") setImportMode(savedMode);
+    if (
+      savedMode === "account"
+      || savedMode === "at"
+      || savedMode === "api_key"
+      || savedMode === "rt"
+    ) {
+      setImportMode(savedMode);
+    }
     const savedAuthMode = localStorage.getItem(LS_AUTH_MODE);
     if (savedAuthMode === "key" || savedAuthMode === "login") setAuthMode(savedAuthMode);
     const savedKey = localStorage.getItem(LS_KEY);
@@ -218,14 +245,40 @@ export function Sub2ApiAtImportPanel({ onToast }: { onToast: (message: string) =
         accountConcurrency: numberOrUndefined(accountConcurrency),
         priority: numberOrUndefined(accountPriority),
       };
-      const res = importMode === "at"
-        ? await sub2apiImportAt(baseUrl.trim(), authCredential, input, selectedGroupIds, options)
-        : importMode === "api_key"
-          ? await sub2apiImportApiKeys(baseUrl.trim(), authCredential, input, selectedGroupIds, options)
-          : await sub2apiImportRefreshTokens(baseUrl.trim(), authCredential, input, selectedGroupIds, options);
+      const res = importMode === "account"
+        ? await sub2apiImportAccounts(
+          baseUrl.trim(),
+          authCredential,
+          input,
+          selectedGroupIds,
+          options,
+        )
+        : importMode === "at"
+          ? await sub2apiImportAt(baseUrl.trim(), authCredential, input, selectedGroupIds, options)
+          : importMode === "api_key"
+            ? await sub2apiImportApiKeys(
+              baseUrl.trim(),
+              authCredential,
+              input,
+              selectedGroupIds,
+              options,
+            )
+            : await sub2apiImportRefreshTokens(
+              baseUrl.trim(),
+              authCredential,
+              input,
+              selectedGroupIds,
+              options,
+            );
       setResult(res);
       persist();
-      const label = importMode === "at" ? "AT" : importMode === "api_key" ? "API Key" : "RT 刷新";
+      const label = importMode === "account"
+        ? "Sub2API"
+        : importMode === "at"
+          ? "AT"
+          : importMode === "api_key"
+            ? "API Key"
+            : "RT 刷新";
       if (res.failed === 0) onToast(`已导入 ${res.success} 个 ${label} 账号到 Sub2API`);
       else onToast(`成功 ${res.success}，失败 ${res.failed}`);
     } catch (e) {
@@ -237,22 +290,32 @@ export function Sub2ApiAtImportPanel({ onToast }: { onToast: (message: string) =
 
   const canSubmit = baseUrl.trim() !== "" && authCredential.trim() !== "" && input.trim() !== "";
   const visibleResults = result?.results.slice(0, RESULT_DISPLAY_LIMIT) ?? [];
-  const modeLabel = importMode === "at"
-    ? "AT JSON"
-    : importMode === "api_key"
-      ? "API Key JSON"
-      : "Refresh Token / JSON";
-  const modeDescription = importMode === "at"
-    ? "只读取 JSON 里的 access_token，创建 Sub2API OpenAI OAuth 账号；支持无 RT。"
-    : importMode === "api_key"
-      ? "只读取 JSON 或文本里的 api_key，创建 Sub2API OpenAI API Key 账号。"
-      : "批量刷新 Refresh Token，成功后直接上传 Sub2API OpenAI OAuth 账号。";
-  const sample = importMode === "at" ? AT_SAMPLE : importMode === "api_key" ? API_KEY_SAMPLE : RT_SAMPLE;
+  const modeLabel = importMode === "account"
+    ? "Sub2API 账号 JSON"
+    : importMode === "at"
+      ? "Access Token JSON"
+      : importMode === "api_key"
+        ? "API Key JSON"
+        : "Refresh Token / JSON";
+  const modeDescription = importMode === "account"
+    ? "直接导入完整 Sub2API 账号，保留 agentIdentity、OAuth、API Key 等原始凭据。"
+    : importMode === "at"
+      ? "从 JSON 提取 access_token，新建 Sub2API OpenAI OAuth 账号；支持无 RT。"
+      : importMode === "api_key"
+        ? "从 JSON 或文本提取 api_key，新建 Sub2API OpenAI API Key 账号。"
+        : "先刷新 Refresh Token，再新建并上传 Sub2API OpenAI OAuth 账号。";
+  const sample = importMode === "account"
+    ? ACCOUNT_SAMPLE
+    : importMode === "at"
+      ? AT_SAMPLE
+      : importMode === "api_key"
+        ? API_KEY_SAMPLE
+        : RT_SAMPLE;
 
   return (
     <Stack spacing={2.5}>
       <Stack spacing={0.5}>
-        <Typography variant="h6">Sub2API 一键导入</Typography>
+        <Typography variant="h6">导入到 Sub2API</Typography>
         <Typography variant="body2" color="text.secondary">
           {modeDescription}
         </Typography>
@@ -261,6 +324,7 @@ export function Sub2ApiAtImportPanel({ onToast }: { onToast: (message: string) =
       <ToggleButtonGroup
         size="small"
         exclusive
+        fullWidth
         value={importMode}
         onChange={(_, value: ImportMode | null) => {
           if (!value) return;
@@ -270,10 +334,17 @@ export function Sub2ApiAtImportPanel({ onToast }: { onToast: (message: string) =
           setError(null);
           setTested(null);
         }}
+        sx={{
+          flexWrap: "wrap",
+          "& .MuiToggleButton-root": {
+            flex: "1 1 140px",
+          },
+        }}
       >
-        <ToggleButton value="at">AT/OAuth</ToggleButton>
+        <ToggleButton value="account">账号 JSON</ToggleButton>
+        <ToggleButton value="at">Access Token</ToggleButton>
         <ToggleButton value="api_key">API Key</ToggleButton>
-        <ToggleButton value="rt">RT 刷新上传</ToggleButton>
+        <ToggleButton value="rt">Refresh Token</ToggleButton>
       </ToggleButtonGroup>
 
       <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
@@ -400,6 +471,11 @@ export function Sub2ApiAtImportPanel({ onToast }: { onToast: (message: string) =
           slotProps={{ htmlInput: { step: 1 } }}
         />
       </Stack>
+      {importMode === "account" && (
+        <Typography variant="caption" color="text.secondary">
+          账号 JSON 中已有调度数量或优先级时保留原值，缺失时才使用上面的默认值。
+        </Typography>
+      )}
 
       {groups.length > 0 && (
         <Stack spacing={0.5}>
@@ -452,7 +528,7 @@ export function Sub2ApiAtImportPanel({ onToast }: { onToast: (message: string) =
           onClick={handleImport}
           disabled={importing || !canSubmit}
         >
-          一键导入 Sub2API
+          导入到 Sub2API
         </Button>
         <Typography variant="caption" color="text.secondary">
           Sub2API 请求由当前服务后端转发，不要求目标服务支持 CORS；凭据不会在服务端落盘保存。
