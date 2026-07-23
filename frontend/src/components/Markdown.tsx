@@ -66,9 +66,16 @@ interface Props {
   content: string;
 }
 
+function normalizeNewlines(content: string): string {
+  const normalized = content.replace(/\r\n/g, "\n");
+  return normalized.includes("\n")
+    ? normalized
+    : normalized.replace(/\\r\\n|\\n/g, "\n");
+}
+
 /// Block-level markdown renderer.
 export function Markdown({ content }: Props) {
-  const lines = content.replace(/\r\n/g, "\n").split("\n");
+  const lines = normalizeNewlines(content).split("\n");
   const blocks: ReactNode[] = [];
   let listItems: string[] = [];
   let key = 0;

@@ -80,6 +80,19 @@ fn normalize(tag: &str) -> &str {
     tag.strip_prefix('v').unwrap_or(tag)
 }
 
+/// Recover release bodies accidentally published with literal `\n` escapes.
+/// Keep intentional escapes untouched when the body already has real lines.
+fn normalize_release_body(body: Option<String>) -> Option<String> {
+    body.map(|body| {
+        let normalized = body.replace("\r\n", "\n");
+        if normalized.contains('\n') {
+            normalized
+        } else {
+            normalized.replace("\\r\\n", "\n").replace("\\n", "\n")
+        }
+    })
+}
+
 /// Compare two version strings via semver; falls back to string compare when
 /// either side is not valid semver.
 fn is_newer(candidate: &str, current: &str) -> bool {
@@ -194,7 +207,7 @@ impl UpdateChecker {
                 version: normalize(&r.tag_name).to_string(),
                 tag: r.tag_name,
                 name: r.name,
-                body: r.body,
+                body: normalize_release_body(r.body),
                 published_at: r.published_at,
                 prerelease: r.prerelease,
                 html_url: r.html_url,
@@ -262,5 +275,17 @@ mod update_tests {
     fn normalize_strips_v() {
         assert_eq!(normalize("v1.2.3"), "1.2.3");
         assert_eq!(normalize("1.2.3"), "1.2.3");
+    }
+
+    #[test]
+    fn release_body_recovers_literal_newline_escapes() {
+        assert_eq!(
+            normalize_release_body(Some("- first\\n- second".to_string())).as_deref(),
+            Some("- first\n- second")
+        );
+        assert_eq!(
+            normalize_release_body(Some("- first\n- code `\\\\n`".to_string())).as_deref(),
+            Some("- first\n- code `\\\\n`")
+        );
     }
 }
