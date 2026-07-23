@@ -4,8 +4,8 @@ import type { BatchResult, HistoryEntry } from "../types";
 const STORAGE_KEY = "codex-converter:history";
 const MAX_ENTRIES = 20;
 
-/// Persist recent batch results in localStorage. Only metadata + result are
-/// stored locally in the browser; nothing is sent anywhere.
+/// Persist recent batch results in localStorage. Results may contain full
+/// credentials, so the privacy notice explicitly discloses this behavior.
 export function useHistory() {
   const [entries, setEntries] = useState<HistoryEntry[]>(() => {
     try {

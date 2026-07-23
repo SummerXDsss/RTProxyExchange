@@ -26,6 +26,7 @@ import { ThemeProvider } from "@mui/material/styles";
 import DarkModeIcon from "@mui/icons-material/DarkMode";
 import HistoryIcon from "@mui/icons-material/History";
 import LightModeIcon from "@mui/icons-material/LightMode";
+import PrivacyTipIcon from "@mui/icons-material/PrivacyTip";
 import TransformIcon from "@mui/icons-material/Transform";
 import { useEffect, useState } from "react";
 import { convert, convertStream, oauthExchange, oauthStart } from "./api";
@@ -73,7 +74,7 @@ const SECTION_TABS: Record<MainSection, { value: AppTab; label: string }[]> = {
   tools: [{ value: "update", label: "检查更新" }],
 };
 
-const PRIVACY_NOTICE_KEY = "rtpx:privacy_notice:v1";
+const PRIVACY_NOTICE_KEY = "rtpx:privacy_notice:v2";
 
 export function App() {
   const { mode, toggle, theme } = useColorMode();
@@ -346,6 +347,11 @@ export function App() {
             <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
               OpenAI 账号转换与导入
             </Typography>
+            <Tooltip title="隐私与责任声明">
+              <IconButton onClick={() => setPrivacyOpen(true)} aria-label="隐私与责任声明">
+                <PrivacyTipIcon />
+              </IconButton>
+            </Tooltip>
             <Tooltip title="历史记录">
               <IconButton onClick={() => setHistoryOpen(true)}>
                 <HistoryIcon />
@@ -484,29 +490,41 @@ export function App() {
           onToast={setToast}
         />
 
-        <Dialog open={privacyOpen} maxWidth="sm" fullWidth>
-          <DialogTitle>隐私与本地存储说明</DialogTitle>
+        <Dialog open={privacyOpen} maxWidth="sm" fullWidth aria-labelledby="privacy-title">
+          <DialogTitle id="privacy-title">隐私与责任声明</DialogTitle>
           <DialogContent>
             <Stack spacing={1.5} sx={{ pt: 0.5 }}>
               <Typography variant="body2">
-                本服务不会在服务端落盘保存你的 Refresh Token、Access Token、API Key 或管理密钥。
+                应用 API 只请求当前站点的 <code>/api/*</code>，Sub2API、CLIProxyAPI 与 Token
+                刷新请求均由本站后端发起。
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                转换、刷新和上传请求会在处理时临时经过当前服务，并按你的操作转发到 OpenAI、Sub2API 或
-                CLIProxyAPI；请求完成后后端不持久化这些敏感内容。
+                Refresh Token、Access Token、API Key、管理密钥和账号文件会在请求期间由本站后端暂存于内存，并按你的操作转发；
+                本应用不会主动写入服务端数据库或文件。
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                历史记录、界面偏好、Sub2API/CLIProxyAPI 地址，以及你主动勾选“记住”的密钥，只会保存到当前浏览器的
-                localStorage，其中密钥是本机明文保存。
+                转换历史会把完整结果保存到当前浏览器 localStorage，其中可能包含 Token。你主动勾选“记住”的管理密钥也会以本机明文保存，
+                请勿在共享设备上启用。
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                只有在你主动使用 OAuth 登录时，浏览器才会打开 OpenAI 官方授权页面。
               </Typography>
               <Alert severity="warning" variant="outlined" sx={{ py: 0.5 }}>
-                如果这是公网实例，请只在信任的环境中使用，并避免在共享设备上勾选记住密钥。
+                公网实例的部署者负责 HTTPS、访问控制、反向代理日志和当地合规；请仅使用你有权处理的账号与凭据。
               </Alert>
             </Stack>
           </DialogContent>
           <DialogActions>
+            <Button
+              component="a"
+              href="/privacy.html"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              查看完整声明
+            </Button>
             <Button variant="contained" onClick={acceptPrivacyNotice}>
-              我知道了
+              我已知悉
             </Button>
           </DialogActions>
         </Dialog>

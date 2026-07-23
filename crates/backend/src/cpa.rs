@@ -1,8 +1,8 @@
 //! Direct integration with a user-provided CLIProxyAPI (CPA) instance.
 //!
-//! The browser cannot call CLIProxyAPI directly (HTTPS→HTTP mixed content +
-//! CORS), so these handlers proxy requests server-side. The user supplies the
-//! CPA base URL and management key; we forward to CPA's Management API
+//! The browser only talks to this backend, so these handlers proxy requests
+//! server-side. The user supplies the CPA base URL and management key; we
+//! forward to CPA's Management API
 //! (`/v0/management/...`). The management key is used transiently and never
 //! logged or persisted.
 

@@ -531,7 +531,7 @@ export function Sub2ApiAtImportPanel({ onToast }: { onToast: (message: string) =
           导入到 Sub2API
         </Button>
         <Typography variant="caption" color="text.secondary">
-          Sub2API 请求由当前服务后端转发，不要求目标服务支持 CORS；凭据不会在服务端落盘保存。
+          浏览器只连接本站后端，Sub2API 请求由后端转发；凭据不会在服务端落盘保存。
         </Typography>
       </Stack>
 

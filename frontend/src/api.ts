@@ -17,6 +17,24 @@ import type {
   UpdateStatus,
 } from "./types";
 
+const BACKEND_API_PREFIX = "/api/";
+
+/// All browser requests must stay on this application's origin and enter
+/// through the Rust backend. Target service URLs are data in the request body,
+/// never browser fetch destinations.
+async function backendFetch(path: string, init?: RequestInit): Promise<Response> {
+  if (!path.startsWith(BACKEND_API_PREFIX) || path.startsWith("//")) {
+    throw new Error("前端只允许请求本站后端 /api/* 接口");
+  }
+
+  return fetch(path, {
+    ...init,
+    cache: "no-store",
+    credentials: "same-origin",
+    referrerPolicy: "same-origin",
+  });
+}
+
 /// Read the server error message from a non-2xx response.
 async function errorMessage(resp: Response): Promise<string> {
   let message = `请求失败 (${resp.status})`;
@@ -31,7 +49,7 @@ async function errorMessage(resp: Response): Promise<string> {
 
 /// Call the non-streaming convert endpoint (used for dry-run / single login).
 export async function convert(req: ConvertRequest): Promise<ConvertResponse> {
-  const resp = await fetch("/api/convert", {
+  const resp = await backendFetch("/api/convert", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
@@ -42,7 +60,7 @@ export async function convert(req: ConvertRequest): Promise<ConvertResponse> {
 
 /// Fetch effective backend config (no client_id; that is internal).
 export async function fetchConfig(): Promise<BackendConfig> {
-  const resp = await fetch("/api/config");
+  const resp = await backendFetch("/api/config");
   if (!resp.ok) throw new Error(await errorMessage(resp));
   return resp.json();
 }
@@ -50,7 +68,7 @@ export async function fetchConfig(): Promise<BackendConfig> {
 /// Start manual Codex OAuth. The backend only creates PKCE state and returns
 /// the browser auth URL; users paste the final callback URL back for exchange.
 export async function oauthStart(): Promise<OAuthStartResponse> {
-  const resp = await fetch("/api/oauth/start", { method: "POST" });
+  const resp = await backendFetch("/api/oauth/start", { method: "POST" });
   if (!resp.ok) throw new Error(await errorMessage(resp));
   return resp.json();
 }
@@ -60,7 +78,7 @@ export async function oauthExchange(
   sessionId: string,
   callbackUrl: string,
 ): Promise<OAuthExchangeResponse> {
-  const resp = await fetch("/api/oauth/exchange", {
+  const resp = await backendFetch("/api/oauth/exchange", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ session_id: sessionId, callback_url: callbackUrl }),
@@ -72,7 +90,7 @@ export async function oauthExchange(
 /// Offline format conversion between CPA and Sub2API. Returns the converted
 /// document as a generic JSON value (CPA BatchResult or Sub2API export).
 export async function transform(req: TransformRequest): Promise<unknown> {
-  const resp = await fetch("/api/transform", {
+  const resp = await backendFetch("/api/transform", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
@@ -86,7 +104,7 @@ export async function transformZip(
   direction: TransformRequest["direction"],
   files: TransformZipFile[],
 ): Promise<Blob> {
-  const resp = await fetch("/api/transform/zip", {
+  const resp = await backendFetch("/api/transform/zip", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ direction, files }),
@@ -97,7 +115,7 @@ export async function transformZip(
 
 /// Split a batch of accounts into per-account entries (both formats included).
 export async function splitAccounts(input: string): Promise<SplitResult> {
-  const resp = await fetch("/api/split", {
+  const resp = await backendFetch("/api/split", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ input }),
@@ -111,7 +129,7 @@ export async function downloadSplitZip(
   input: string,
   formats: SplitFormat[],
 ): Promise<Blob> {
-  const resp = await fetch("/api/split/zip", {
+  const resp = await backendFetch("/api/split/zip", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ input, formats }),
@@ -122,14 +140,14 @@ export async function downloadSplitZip(
 
 /// Check for updates against the project's GitHub releases/tags.
 export async function checkUpdate(refresh = false): Promise<UpdateStatus> {
-  const resp = await fetch(`/api/update${refresh ? "?refresh=1" : ""}`);
+  const resp = await backendFetch(`/api/update${refresh ? "?refresh=1" : ""}`);
   if (!resp.ok) throw new Error(await errorMessage(resp));
   return resp.json();
 }
 
 /// Ask the backend container to start the self-update helper.
 export async function applyUpdate(): Promise<ApplyUpdateResponse> {
-  const resp = await fetch("/api/update/apply", { method: "POST" });
+  const resp = await backendFetch("/api/update/apply", { method: "POST" });
   if (!resp.ok) throw new Error(await errorMessage(resp));
   return resp.json();
 }
@@ -139,7 +157,7 @@ export async function cpaTest(
   baseUrl: string,
   managementKey: string,
 ): Promise<{ ok: boolean; cpa_version?: string }> {
-  const resp = await fetch("/api/cpa/test", {
+  const resp = await backendFetch("/api/cpa/test", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ base_url: baseUrl, management_key: managementKey }),
@@ -154,7 +172,7 @@ export async function cpaUpload(
   managementKey: string,
   files: { name: string; content: unknown }[],
 ): Promise<CpaUploadResponse> {
-  const resp = await fetch("/api/cpa/upload", {
+  const resp = await backendFetch("/api/cpa/upload", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ base_url: baseUrl, management_key: managementKey, files }),
@@ -168,7 +186,7 @@ export async function sub2apiTest(
   baseUrl: string,
   adminKey: string,
 ): Promise<{ ok: boolean }> {
-  const resp = await fetch("/api/sub2api/test", {
+  const resp = await backendFetch("/api/sub2api/test", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ base_url: baseUrl, admin_key: adminKey }),
@@ -183,7 +201,7 @@ export async function sub2apiLogin(
   email: string,
   password: string,
 ): Promise<Sub2ApiLoginResponse> {
-  const resp = await fetch("/api/sub2api/login", {
+  const resp = await backendFetch("/api/sub2api/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ base_url: baseUrl, email, password }),
@@ -197,7 +215,7 @@ export async function sub2apiGroups(
   baseUrl: string,
   adminKey: string,
 ): Promise<Sub2ApiGroup[]> {
-  const resp = await fetch("/api/sub2api/groups", {
+  const resp = await backendFetch("/api/sub2api/groups", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ base_url: baseUrl, admin_key: adminKey }),
@@ -215,7 +233,7 @@ export async function sub2apiImportAccounts(
   groupIds: number[] = [],
   options: { accountConcurrency?: number; priority?: number } = {},
 ): Promise<Sub2ApiImportResponse> {
-  const resp = await fetch("/api/sub2api/import-accounts", {
+  const resp = await backendFetch("/api/sub2api/import-accounts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -239,7 +257,7 @@ export async function sub2apiImportAt(
   groupIds: number[] = [],
   options: { accountConcurrency?: number; priority?: number } = {},
 ): Promise<Sub2ApiImportResponse> {
-  const resp = await fetch("/api/sub2api/import-at", {
+  const resp = await backendFetch("/api/sub2api/import-at", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -263,7 +281,7 @@ export async function sub2apiImportApiKeys(
   groupIds: number[] = [],
   options: { accountConcurrency?: number; priority?: number } = {},
 ): Promise<Sub2ApiImportResponse> {
-  const resp = await fetch("/api/sub2api/import-api-keys", {
+  const resp = await backendFetch("/api/sub2api/import-api-keys", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -287,7 +305,7 @@ export async function sub2apiImportRefreshTokens(
   groupIds: number[] = [],
   options: { accountConcurrency?: number; priority?: number } = {},
 ): Promise<Sub2ApiImportResponse> {
-  const resp = await fetch("/api/sub2api/import-refresh-tokens", {
+  const resp = await backendFetch("/api/sub2api/import-refresh-tokens", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -313,7 +331,7 @@ export async function convertStream(
   onEvent: (event: ProgressEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
-  const resp = await fetch("/api/convert/stream", {
+  const resp = await backendFetch("/api/convert/stream", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),

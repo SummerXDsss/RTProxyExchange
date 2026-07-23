@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>隐私与责任声明 - RTProxyExchange</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.7;
+      }
+      body {
+        margin: 0;
+        background: Canvas;
+        color: CanvasText;
+      }
+      main {
+        width: min(760px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 40px 0 64px;
+      }
+      h1 {
+        margin: 0 0 4px;
+        font-size: 28px;
+      }
+      h2 {
+        margin: 28px 0 8px;
+        font-size: 18px;
+      }
+      p,
+      li {
+        font-size: 15px;
+      }
+      .date,
+      .note {
+        color: GrayText;
+      }
+      .warning {
+        border-left: 4px solid #d97706;
+        padding: 10px 14px;
+        background: color-mix(in srgb, #d97706 10%, Canvas);
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      a {
+        color: LinkText;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>隐私与责任声明</h1>
+      <p class="date">生效日期：2026 年 7 月 23 日</p>
+
+      <p>
+        本声明适用于 RTProxyExchange 的默认 Web 界面。公开部署者应根据实际运营主体、服务器所在地和适用法律补充自己的主体信息、联系方式与合规条款。
+      </p>
+
+      <h2>请求如何处理</h2>
+      <ul>
+        <li>浏览器应用 API 只请求当前站点的 <code>/api/*</code>，Sub2API、CLIProxyAPI 与 Token 刷新请求由本站后端发起。</li>
+        <li>用户主动使用 OAuth 登录时，浏览器会打开 OpenAI 官方授权页面。</li>
+        <li>Token、API Key、管理密钥、管理员密码和账号 JSON 会在请求期间由后端内存处理。</li>
+        <li>后端仅按用户操作将必要数据转发到 OpenAI 或用户指定的目标服务。</li>
+        <li>本应用不建立用户数据库，也不会主动把这些敏感数据写入服务端文件。</li>
+      </ul>
+
+      <h2>浏览器本地存储</h2>
+      <p>
+        最近 20 条转换历史及完整结果可能保存在 localStorage，结果中可能包含 Token。服务地址、界面偏好，以及用户主动勾选“记住”后的管理密钥也可能保存在 localStorage，其中密钥为本机明文。
+      </p>
+      <p>
+        Sub2API 管理员密码不会写入 localStorage；登录取得的 JWT 默认只保存在当前页面内存中。共享设备上请勿记住密钥，并在使用后清空历史记录和站点数据。
+      </p>
+
+      <h2>日志与第三方</h2>
+      <p>
+        应用不会主动记录完整 Token 或管理密钥，但反向代理、CDN、云平台或托管服务可能记录 IP、时间、路径、User-Agent 和响应状态。部署者负责避免基础设施记录请求体或敏感请求头。
+      </p>
+      <p>
+        刷新、登录、上传和更新检查可能连接 OpenAI、用户指定的 Sub2API、用户指定的 CLIProxyAPI 或 GitHub。第三方按各自政策处理数据。
+      </p>
+
+      <h2>安全与责任</h2>
+      <p class="warning">
+        “不在服务端持久化”不等于数据从未进入服务器。敏感数据会在传输和处理期间经过后端内存及网络链路。
+      </p>
+      <p>
+        用户应仅提交自己有权处理的账号与凭据，并确认部署者、域名和 HTTPS 证书可信。公网部署者负责 HTTPS、访问控制、日志配置、事件响应和当地法律合规。
+      </p>
+
+      <h2>免责声明</h2>
+      <p>
+        本软件按“现状”提供，不保证第三方接口持续可用。因误操作、凭据泄露、第三方服务、部署配置、网络攻击或违法使用造成的损失，由相应责任方依法承担。本声明不构成法律意见。
+      </p>
+
+      <p class="note">
+        完整源文件见项目根目录 <code>PRIVACY.md</code>。声明可能随软件功能更新，重大变化会通过版本发布或首次访问提示重新告知。
+      </p>
+      <p><a href="/">返回 RTProxyExchange</a></p>
+    </main>
+  </body>
+</html>

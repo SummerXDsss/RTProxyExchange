@@ -41,8 +41,8 @@ const LS_BASE = "rtpx:cpa:base_url";
 const LS_KEY = "rtpx:cpa:mgmt_key";
 const RESULT_DISPLAY_LIMIT = 200;
 
-/// Dialog to push CPA account files directly into a CLIProxyAPI instance via
-/// its Management API (proxied through our backend to avoid CORS/mixed-content).
+/// Dialog to push CPA account files into a CLIProxyAPI instance through the
+/// same-origin backend proxy.
 export function CpaUploadDialog({ open, onClose, files, onToast }: Props) {
   const [baseUrl, setBaseUrl] = useState("");
   const [mgmtKey, setMgmtKey] = useState("");

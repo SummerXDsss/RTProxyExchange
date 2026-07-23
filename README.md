@@ -11,7 +11,7 @@ Refresh Token ⇄ Proxy 账号格式转换工具。粘贴 Codex / OpenAI 的 **R
 - 🔄 CPA ↔ Sub2API 格式互转
 - ✂️ 批量账号拆分，按 `codex_{email}.json` 命名
 - 📦 单独 / 打包(zip) 导出，一键复制
-- ⚡ 实时进度（SSE），纯本地处理，Token 不落盘
+- ⚡ 实时进度（SSE），浏览器统一请求本站后端，敏感数据不在服务端持久化
 
 实现参考 PRD.md 中的功能需求（FR-001 ~ FR-008）。
 
@@ -41,7 +41,7 @@ RefreshToken2CPA/
 │   │       └── tests.rs        # 单元测试
 │   ├── backend/              # HTTP 服务
 │   │   └── src/
-│   │       ├── main.rs         # 启动、CORS、静态资源、配置分层
+│   │       ├── main.rs         # 启动、同源 API、静态资源、配置分层
 │   │       └── api.rs          # /api/health, /api/config, /api/convert, /api/convert/stream
 │   └── cli/                  # 命令行工具
 │       └── src/
@@ -171,8 +171,12 @@ cargo clippy --workspace --all-targets   # 零告警
 
 ## 安全说明
 
-- Token 仅在内存中处理，不落盘
+- 浏览器应用 API 只请求当前站点的 `/api/*`，Sub2API、CLIProxyAPI 与 Token 刷新请求均由后端发起
+- Token 和管理密钥仅在后端请求期间于内存中处理，本应用不主动写入服务端数据库或文件
 - 日志与错误信息中仅保留 Token 前 10 个字符的预览
 - CLI 输出文件在 Unix 上以 `0600` 权限创建
-- 前端历史记录仅存于浏览器 localStorage，不上传
+- 前端历史记录保存在浏览器 localStorage，完整转换结果可能包含 Token
+- 主动勾选“记住”后，管理密钥会以浏览器本机明文保存
 - 生成的 `accounts.json` 已加入 `.gitignore`
+
+完整说明见 [隐私与责任声明](PRIVACY.md)。公网部署者需自行负责 HTTPS、访问控制、基础设施日志和适用法律合规。
